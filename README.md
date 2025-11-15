@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Smart Resume - AI-Powered Job Matching
 
-## Getting Started
+A Next.js application for creating smart resumes and finding AI-powered job matches.
 
-First, run the development server:
+## Features
 
+- 📄 **Resume Upload**: Upload PDF or paste resume text
+- 🤖 **AI-Powered Parsing**: Automatically extract and structure resume data
+- 🎯 **Smart Job Matching**: Find the best job matches based on skills and experience
+- 📊 **Match Analysis**: Get detailed insights on why jobs match and how to improve
+
+## Setup
+
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Create a `.env.local` file in the `smart_resume` directory:
+```env
+GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key
+QDRANT_URL=your_qdrant_url
+QDRANT_API_KEY=your_qdrant_api_key
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# Upstash Redis (recommended - uses REST API, no connection management)
+UPSTASH_REDIS_REST_URL=https://your-instance.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_token
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# OR use the traditional Redis URL (will be parsed automatically)
+# REDIS_URL=rediss://default:token@host:6379
+```
 
-## Learn More
+3. All required files are now self-contained in the `smart_resume` folder:
+   - `lib/agents.ts` - Contains all agent logic and resume processing
+   - `lib/redisClient.js` - Upstash Redis client (REST-based, perfect for serverless)
+   - `lib/schema.js` - Resume schema definition
+   - `lib/helpers.js` - Helper functions
 
-To learn more about Next.js, take a look at the following resources:
+**Note**: This app uses [Upstash Redis](https://upstash.com/docs/redis/quickstarts/nextjs-app-router) which is REST-based and doesn't require connection management, making it perfect for Next.js serverless environments.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. Run the development server:
+```bash
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+smart_resume/
+├── app/
+│   ├── api/
+│   │   └── resume/
+│   │       ├── upload/route.ts          # Upload resume endpoint
+│   │       └── [id]/
+│   │           ├── route.ts             # Get resume by ID
+│   │           └── matches/route.ts     # Get job matches
+│   ├── resume/
+│   │   └── [id]/page.tsx                 # Resume view page
+│   ├── layout.tsx                        # Root layout
+│   └── page.tsx                          # Home page
+├── lib/
+│   ├── backend.ts                        # Backend utilities
+│   ├── qdrant.ts                         # Qdrant client
+│   └── redis.ts                           # Redis client
+└── package.json
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Usage
+
+1. **Upload Resume**: Go to the home page and either:
+   - Paste your resume text in the textarea
+   - Upload a PDF file
+   - Click "Create Smart Resume"
+
+2. **View Resume**: After uploading, you'll be redirected to the resume view page where you can:
+   - See all extracted resume information
+   - View skills, experience, projects, etc.
+
+3. **Find Job Matches**: Click "Find Job Matches" to:
+   - Get AI-powered job recommendations
+   - See match scores and reasons
+   - View matched and missing skills
+   - Get improvement suggestions
+
+## API Endpoints
+
+- `POST /api/resume/upload` - Upload a resume (file or text)
+- `GET /api/resume/[id]` - Get resume by ID
+- `GET /api/resume/[id]/matches` - Get job matches for a resume
