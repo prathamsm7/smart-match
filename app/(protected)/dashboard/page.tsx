@@ -12,7 +12,7 @@ export default function DashboardPage() {
   // Use the hook for cross-tab auth synchronization (handles SIGNED_OUT)
   useSupabaseAuthSync();
   
-  // Require authentication - redirects to signin if not authenticated
+  // Get user data for display (auth check is handled by layout, but we need user.email)
   const { user, loading } = useRequireAuth();
 
   async function handleSignOut() {
@@ -36,8 +36,9 @@ export default function DashboardPage() {
     }
   }
 
-  // Show loading state while checking authentication
-  if (loading) {
+  // Show loading state while fetching user data
+  // Note: Auth check is handled by layout, but we need to wait for user data
+  if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

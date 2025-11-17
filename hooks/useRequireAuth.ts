@@ -5,19 +5,29 @@ import { useRouter } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/superbase/client";
 
 /**
- * Hook to require authentication for a page.
+ * Hook to require authentication for a page or layout.
  * Redirects to signin if user is not authenticated.
+ * 
+ * Can be used in:
+ * - Layouts: For automatic protection of all child routes
+ * - Pages: When you need direct access to user data
  * 
  * @returns {Object} { user, loading } - The authenticated user and loading state
  * 
  * @example
  * ```tsx
- * export default function ProtectedPage() {
- *   const { user, loading } = useRequireAuth();
- *   
+ * // In a layout (app/(protected)/layout.tsx)
+ * export default function ProtectedLayout({ children }) {
+ *   const { loading } = useRequireAuth();
  *   if (loading) return <LoadingSpinner />;
- *   
- *   return <div>Protected content for {user.email}</div>;
+ *   return <>{children}</>;
+ * }
+ * 
+ * // In a page (when you need user data)
+ * export default function DashboardPage() {
+ *   const { user, loading } = useRequireAuth();
+ *   if (loading) return <LoadingSpinner />;
+ *   return <div>Welcome {user.email}</div>;
  * }
  * ```
  */
