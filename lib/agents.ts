@@ -198,7 +198,6 @@ async function explainMatchAndSkillGap(resume: any, job: any) {
         });
 
         const raw = res.choices?.[0]?.message?.content || "";
-        console.log("🚀 ~ explainMatchAndSkillGap ~ raw:", raw)
         return JSON.parse(raw);
     } catch (error) {
         console.error("❌ Error in explainMatchAndSkillGap:", error);
@@ -417,9 +416,7 @@ const searchJobs = tool({
             );
 
             enhancedResults.sort((a: any, b: any) => b.overallMatchScore - a.overallMatchScore);
-            console.log("🚀 ~ enhancedResults:", enhancedResults)
 
-            console.log(`✅ Successfully processed ${enhancedResults.length} job matches`);
             return enhancedResults;
         } catch (error: any) {
             console.error("❌ Error in searchJobs tool:", error);
@@ -433,36 +430,32 @@ const masterResumeAgent = new Agent({
     name: "MasterResumeAgent",
     model: "gpt-5-nano",
     instructions: `You are a master agent that manages resumes and job matching using tools.
-
+            
             Inputs you may receive:
             - source: "id" or "file"
             - If source="id": resumeId is provided
             - If source="file": resumeText is provided (raw text of the resume)
-
+            
             Primary objectives:
             1) If source="id" (or a resumeId is present), call searchJobs with the given resumeId to return top job matches.
             2) If source="file", FIRST parse the resumeText into a structured resume object by calling extractResumeData,
-            THEN call uploadResume with the EXACT SAME structured object to store it and get a resumeId,
-            THEN call searchJobs with that resumeId to return top job matches.
-
+               THEN call uploadResume with the EXACT SAME structured object to store it and get a resumeId,
+               THEN call searchJobs with that resumeId to return top job matches.
+            
             Rules:
             - Do not ask the user to call tools; you decide and call them yourself.
             - When extracting, ensure totalExperienceYears follows the inclusive month-counting rule described in extractResumeData.
             - When uploading, pass the SAME structured object as returned from extractResumeData (no modifications).
-            - Finally, ensure searchJobs is called and return the resulting list of matches as your final answer.
-            - Always return matched job array as your final answer.
-
-            Example:
-            [{
-                jobId: '53f413c3-29e5-4212-80ea-4b73520479db',
-                jobTitle: 'Frontend Developer',
-                employerName: 'Digital Commerce Solutions',
-                jobLocation: 'London, UK',
-                jobDescription: '',
-                jobApplyLink: undefined,
-                jobEmploymentType: 'Full-time',
-                jobSalary: '£45,000 - £60,000 / year',
-            }]
+            
+            FINAL RESPONSE FORMAT (CRITICAL):
+            - ALWAYS return a SINGLE JSON object (no markdown, no commentary) with this exact shape:
+              {
+                "resumeId": "<the resumeId returned from uploadResume>",
+                "matches": [ /* array returned from searchJobs (can be empty) */ ]
+              }
+            - "resumeId" MUST come from the uploadResume tool call result.
+            - "matches" MUST come from the searchJobs tool call result when source="file" or when searching by resumeId.
+            - Do NOT return plain arrays or any other structure; always wrap in the JSON object above.
     `,
     tools: [extractResumeData, uploadResume, searchJobs],
 });

@@ -75,7 +75,9 @@ export default function ResumePage() {
 
   async function fetchResume() {
     try {
-      const res = await fetch(`/api/resume/${resumeId}`);
+      const res = await fetch(`/api/resume/${resumeId}`,{
+        next: { revalidate: 900 }, // 10 minutes cache
+      });
       const data = await res.json();
       
       if (!res.ok) {

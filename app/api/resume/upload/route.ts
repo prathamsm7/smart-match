@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { runMasterAgent } from '../../../../lib/backend';
-import { extractTextFromPDFBuffer } from '../../../../lib/agents';
+import { runMasterAgent } from '@/lib/backend';
+import { extractTextFromPDFBuffer } from '@/lib/agents';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,41 +38,50 @@ export async function POST(request: NextRequest) {
       resumeText: text,
     });
 
-    // Extract resumeId from the result
-    // The agent returns structured data, we need to find the resumeId
+    // The master agent is instructed to return:
+    // { "resumeId": "<id>", "matches": [...] }
     let resumeId: string | null = null;
+    let parsedOutput: any = null;
 
-    // Try to extract resumeId from the agent's output
-    // The agent should return the resumeId in the finalOutput or tool results
     if (result.finalOutput) {
       try {
-        const output = JSON.parse(result.finalOutput);
-        resumeId = output.resumeId || null;
+        parsedOutput = JSON.parse(result.finalOutput as string);
+        resumeId = parsedOutput?.resumeId || null;
       } catch {
-        // If not JSON, try to extract from string
-        const idMatch = result.finalOutput.match(/resumeId["\s:]+([a-f0-9-]+)/i);
-        if (idMatch) {
-          resumeId = idMatch[1];
+        // If parsing fails, we fall back to toolCalls below
+      }
+    }
+
+    // Fallback: if for some reason the agent didn't follow the contract,
+    // try to recover resumeId from tool calls (uploadResume result)
+    if (!resumeId && (result as any).toolCalls) {
+      const resultAny = result as any;
+      if (Array.isArray(resultAny.toolCalls)) {
+        for (const call of resultAny.toolCalls) {
+          const toolName = call.toolName || call.name;
+          const toolResult = call.result || call.output || call.data;
+          if (toolName === 'uploadResume' && toolResult?.resumeId) {
+            resumeId = toolResult.resumeId;
+            break;
+          }
         }
       }
     }
 
-    // If we can't find it in finalOutput, check tool calls
-    if (!resumeId && result.toolCalls) {
-      for (const call of result.toolCalls) {
-        if (call.toolName === 'uploadResume' && call.result?.resumeId) {
-          resumeId = call.result.resumeId;
-          break;
-        }
-      }
-    }
-
+    console.log("🚀 ~ POST ~ resumeId:", resumeId)
     if (!resumeId) {
       return NextResponse.json(
         { error: 'Failed to create resume. Please try again.' },
         { status: 500 }
       );
     }
+
+    const resume = await prisma.resume.create({
+      data: {
+        userId: "123",
+        vectorId: resumeId
+      },
+    });
 
     return NextResponse.json({
       success: true,

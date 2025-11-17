@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { runMasterAgent } from '../../../../../lib/agents';
+import { runMasterAgent } from '@/lib/agents';
+import redisClient from '@/lib/redisClient';
 
 export async function GET(
   request: NextRequest,
@@ -7,6 +8,17 @@ export async function GET(
 ) {
   try {
     const { id: resumeId } = await params;
+
+    // const cachedKey = `jobs:${resumeId}`;
+    // const cachedData = await redisClient.get(cachedKey);
+
+    //!TODO: Uncomment this when we have a way to cache the matches
+    // if (cachedData) {
+    //   return NextResponse.json({
+    //     success: true,
+    //     matches: cachedData,
+    //   });
+    // }
 
     if (!resumeId) {
       return NextResponse.json(
@@ -20,7 +32,6 @@ export async function GET(
       source: 'id',
       resumeId,
     });
-    console.log("🚀 ~ GET ~ result:", result)
 
     // Extract matches from the result
     let matches: any[] = [];
@@ -45,6 +56,8 @@ export async function GET(
         // If parsing fails, matches stays empty
       }
     }
+
+    // await redisClient.set(cachedKey, JSON.stringify(matches), { ex: 600 });
 
     return NextResponse.json({
       success: true,

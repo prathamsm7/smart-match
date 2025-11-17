@@ -42,7 +42,10 @@ export default function JobMatchesPage() {
   async function fetchMatches() {
     try {
       setLoading(true);
-      const res = await fetch(`/api/resume/${resumeId}/matches`);
+      const res = await fetch(`/api/resume/${resumeId}/matches`,{
+        next: { revalidate: 600 }, // 10 minutes cache
+        cache: "force-cache",
+      });
       const data = await res.json();
       
       if (!res.ok) {

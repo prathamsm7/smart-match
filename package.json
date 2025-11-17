@@ -11,7 +11,10 @@
   "dependencies": {
     "@ai-sdk/google": "^2.0.29",
     "@openai/agents": "^0.3.0",
+    "@prisma/client": "^6.19.0",
     "@qdrant/js-client-rest": "^1.15.1",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.81.1",
     "@upstash/redis": "^1.35.6",
     "ai": "^5.0.89",
     "dotenv": "^17.2.3",
@@ -20,6 +23,7 @@
     "openai": "^6.8.1",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
+    "prisma": "^6.19.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "redis": "^5.9.0",

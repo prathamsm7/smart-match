@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { qdrantClient } from '../../../../lib/qdrant';
-import { redisClient } from '../../../../lib/redis';
+import { qdrantClient } from '@/lib/qdrant';
+import { redisClient } from '@/lib/redis';
 
 export async function GET(
   request: NextRequest,
