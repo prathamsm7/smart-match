@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Upload, FileText, Sparkles } from 'lucide-react';
+import { useSupabaseAuthSync } from '@/hooks/useSupabaseAuth';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 export default function UploadPage() {
   const [resumeText, setResumeText] = useState('');
@@ -11,6 +13,24 @@ export default function UploadPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  // Use the hook for cross-tab auth synchronization (handles SIGNED_OUT)
+  useSupabaseAuthSync();
+  
+  // Require authentication - redirects to signin if not authenticated
+  const { loading: authLoading } = useRequireAuth();
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-300">Verifying authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

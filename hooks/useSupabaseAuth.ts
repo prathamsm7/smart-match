@@ -23,10 +23,23 @@ export function useSupabaseAuthSync() {
       // Handle sign-in and sign-up (both trigger SIGNED_IN event)
       if (event === "SIGNED_IN") {
         router.refresh(); // refresh server components
-        // Use window.location for immediate redirect
-        if (window.location.pathname !== "/dashboard") {
-          window.location.href = "/dashboard";
+        // Only redirect if we're on the signin page or have a redirect parameter
+        const currentPath = window.location.pathname;
+        const searchParams = new URLSearchParams(window.location.search);
+        const redirectTo = searchParams.get('redirect');
+        
+        // If we're on signin page, redirect to the target (or dashboard)
+        if (currentPath === '/signin') {
+          const target = redirectTo || '/dashboard';
+          if (target !== currentPath) {
+            window.location.href = target;
+          }
         }
+        // If we have a redirect parameter but not on signin, respect it
+        else if (redirectTo && redirectTo !== currentPath) {
+          window.location.href = redirectTo;
+        }
+        // Otherwise, stay on current page (user is already on a valid page)
       }
 
       // Handle sign-out

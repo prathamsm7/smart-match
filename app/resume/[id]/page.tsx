@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Download, Share2, Mail, Phone, MapPin, Building2, Code, Lock, Star, ExternalLink, Briefcase } from 'lucide-react';
+import { useSupabaseAuthSync } from '@/hooks/useSupabaseAuth';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 interface Resume {
   name: string;
@@ -66,6 +68,12 @@ export default function ResumePage() {
   const [resume, setResume] = useState<Resume | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Use the hook for cross-tab auth synchronization (handles SIGNED_OUT)
+  useSupabaseAuthSync();
+  
+  // Require authentication - redirects to signin if not authenticated
+  const { user, loading: authLoading } = useRequireAuth();
 
   useEffect(() => {
     if (resumeId) {
@@ -96,12 +104,13 @@ export default function ResumePage() {
     router.push(`/resume/${resumeId}/matches`);
   }
 
-  if (loading) {
+  // Show loading state while checking auth or fetching resume
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-300">Loading resume...</p>
+          <p className="mt-4 text-gray-300">{authLoading ? 'Verifying authentication...' : 'Loading resume...'}</p>
         </div>
       </div>
     );

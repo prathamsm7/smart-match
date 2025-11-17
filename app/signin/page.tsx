@@ -46,7 +46,10 @@ export default function AuthPage() {
         const supabase = createBrowserSupabase();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          router.push("/dashboard");
+          // Check for redirect parameter
+          const searchParams = new URLSearchParams(window.location.search);
+          const redirectTo = searchParams.get('redirect') || '/dashboard';
+          router.push(redirectTo);
           router.refresh();
         }
       } catch (error) {

@@ -1,42 +1,19 @@
 "use client";
 import { createBrowserSupabase } from "@/lib/superbase/client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { useSupabaseAuthSync } from "@/hooks/useSupabaseAuth";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function DashboardPage() {
   const supabase = createBrowserSupabase();
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
-  const [user, setUser] = useState<any>(null);
 
   // Use the hook for cross-tab auth synchronization (handles SIGNED_OUT)
   useSupabaseAuthSync();
-
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        
-        if (error || !user) {
-          // User is not authenticated, redirect to signin
-          router.push("/signin");
-          return;
-        }
-
-        setUser(user);
-      } catch (error) {
-        console.error("Error loading user:", error);
-        router.push("/signin");
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    loadUser();
-  }, [router, supabase]);
+  
+  // Require authentication - redirects to signin if not authenticated
+  const { user, loading } = useRequireAuth();
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -59,6 +36,7 @@ export default function DashboardPage() {
     }
   }
 
+  // Show loading state while checking authentication
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -68,10 +46,6 @@ export default function DashboardPage() {
         </div>
       </div>
     );
-  }
-
-  if (!user) {
-    return null; // Will redirect
   }
 
   return (

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Briefcase, TrendingUp, MapPin, DollarSign, Clock, Award, CheckCircle, XCircle, Lightbulb, ArrowRight, Filter, Search, Star, Building2 } from 'lucide-react';
+import { useSupabaseAuthSync } from '@/hooks/useSupabaseAuth';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 interface JobMatch {
   jobTitle: string;
@@ -32,6 +34,12 @@ export default function JobMatchesPage() {
   const [selectedJob, setSelectedJob] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Use the hook for cross-tab auth synchronization (handles SIGNED_OUT)
+  useSupabaseAuthSync();
+  
+  // Require authentication - redirects to signin if not authenticated
+  const { loading: authLoading } = useRequireAuth();
 
   useEffect(() => {
     if (resumeId) {
@@ -84,12 +92,13 @@ export default function JobMatchesPage() {
     return 'text-orange-400';
   }
 
-  if (loading) {
+  // Show loading state while checking auth or fetching matches
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-300">Loading job matches...</p>
+          <p className="mt-4 text-gray-300">{authLoading ? 'Verifying authentication...' : 'Loading job matches...'}</p>
         </div>
       </div>
     );
