@@ -290,13 +290,6 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 mb-3">
-                {job.skills.map((skill, idx) => (
-                  <span key={idx} className="px-2 py-1 bg-blue-500/20 border border-blue-500/30 rounded text-xs">
-                    {skill}
-                  </span>
-                ))}
-              </div>
 
               <div className="flex items-center justify-between text-xs text-gray-400">
                 <span className="flex items-center">
