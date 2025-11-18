@@ -440,31 +440,37 @@ const masterResumeAgent = new Agent({
             1) If source="id" (or a resumeId is present), call searchJobs with the given resumeId to return top job matches.
             2) If source="file", FIRST parse the resumeText into a structured resume object by calling extractResumeData,
                THEN call uploadResume with the EXACT SAME structured object to store it and get a resumeId,
-               THEN call searchJobs with that resumeId to return top job matches.
+               THEN (ONLY if the task message does NOT say "skip job search" or "do not search for jobs") call searchJobs with that resumeId to return top job matches.
             
             Rules:
             - Do not ask the user to call tools; you decide and call them yourself.
             - When extracting, ensure totalExperienceYears follows the inclusive month-counting rule described in extractResumeData.
             - When uploading, pass the SAME structured object as returned from extractResumeData (no modifications).
+            - If the task message says "skip job search" or "do not search for jobs", STOP after uploading the resume and return only the resumeId.
             
             FINAL RESPONSE FORMAT (CRITICAL):
-            - ALWAYS return a SINGLE JSON object (no markdown, no commentary) with this exact shape:
+            - If job search was skipped (task says "skip job search" or "do not search for jobs"), return:
+              {
+                "resumeId": "<the resumeId returned from uploadResume>"
+              }
+            - If job search was performed, return:
               {
                 "resumeId": "<the resumeId returned from uploadResume>",
                 "matches": [ /* array returned from searchJobs (can be empty) */ ]
               }
             - "resumeId" MUST come from the uploadResume tool call result.
-            - "matches" MUST come from the searchJobs tool call result when source="file" or when searching by resumeId.
+            - "matches" MUST come from the searchJobs tool call result (only if job search was performed).
             - Do NOT return plain arrays or any other structure; always wrap in the JSON object above.
     `,
     tools: [extractResumeData, uploadResume, searchJobs],
 });
 
- async function runMasterAgent({ source, resumeId, filePath, resumeText }: {
+ async function runMasterAgent({ source, resumeId, filePath, resumeText, skipJobSearch = false }: {
     source: 'id' | 'file';
     resumeId?: string;
     filePath?: string;
     resumeText?: string;
+    skipJobSearch?: boolean;
 }) {
     if (source !== 'id' && source !== 'file') {
         throw new Error(`Invalid source "${source}". Use "id" or "file".`);
@@ -483,7 +489,17 @@ const masterResumeAgent = new Agent({
         textBlock = `\nresumeText: """\n${text}\n"""`;
     }
 
-    const message = `Task: Return the top job matches for this user. Decide which tools to call and when. source: ${source}
+    // Build task message based on whether job search should be skipped
+    let taskMessage = '';
+    if (skipJobSearch && source === 'file') {
+        taskMessage = 'Task: Extract and upload the resume. DO NOT search for jobs. Skip job search. Just return the resumeId.';
+    } else if (source === 'id') {
+        taskMessage = 'Task: Return the top job matches for this user. Call searchJobs with the provided resumeId.';
+    } else {
+        taskMessage = 'Task: Return the top job matches for this user. Decide which tools to call and when.';
+    }
+
+    const message = `${taskMessage} source: ${source}
                     ${resumeId ? `resumeId: ${resumeId}\n` : ''}${textBlock}
                 `;
 

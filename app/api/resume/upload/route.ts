@@ -2,21 +2,45 @@ import { NextRequest, NextResponse } from 'next/server';
 import { runMasterAgent } from '@/lib/backend';
 import { extractTextFromPDFBuffer } from '@/lib/agents';
 import { prisma } from '@/lib/prisma';
+import { createServerSupabase } from '@/lib/superbase/server';
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user
+    const supabase = await createServerSupabase();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Find user in database to get their ID
+    const dbUser = await prisma.user.findUnique({
+      where: { email: user.email! },
+    });
+
+    if (!dbUser) {
+      return NextResponse.json(
+        { error: 'User not found in database' },
+        { status: 404 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const resumeText = formData.get('resumeText') as string | null;
+    const skipJobSearch = formData.get('skipJobSearch') === 'true'; // Check if job search should be skipped
 
-    if (!file && !resumeText) {
+    if (!file) {
       return NextResponse.json(
         { error: 'Please provide either a file or resume text' },
         { status: 400 }
       );
     }
 
-    let text = resumeText || '';
+    let text = '';
 
     // If file is provided, extract text from PDF
     if (file) {
@@ -36,6 +60,7 @@ export async function POST(request: NextRequest) {
     const result = await runMasterAgent({
       source: 'file',
       resumeText: text,
+      skipJobSearch: skipJobSearch,
     });
 
     // The master agent is instructed to return:
@@ -78,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     const resume = await prisma.resume.create({
       data: {
-        userId: "123",
+        userId: dbUser.id,
         vectorId: resumeId
       },
     });
