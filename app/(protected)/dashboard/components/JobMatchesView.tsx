@@ -81,8 +81,8 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
         const companyName = job.employerName || 'Company';
         const companyInitial = companyName.charAt(0).toUpperCase();
 
-        // Calculate match score (should be in the job data)
-        const matchScore = job?.finalScore ? Math.round((job.finalScore) * 100) : "NA";
+        // Calculate match score - finalScore is now 0-100 (normalized in backend)
+        const matchScore = job?.finalScore ?? "NA";
         
         // Matched skills (from the match analysis)
         const matchedSkills = job.matchedSkills || []
@@ -95,7 +95,7 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
                            [
                              `Focus on developing ${missingSkills[0] || 'additional'} skills to improve your match.`,
                              `Gain more experience with ${job.type || 'relevant'} technologies.`,
-                             `Consider certifications or courses in ${jobSkills[0] || 'key areas'}.`
+                             `Consider certifications or courses in key areas.`
                            ];
 
         // Format description - convert \n to proper line breaks

@@ -119,7 +119,8 @@ export default function JobMatchesPage() {
   }
 
   const currentJob = matches[selectedJob];
-  const matchScore = currentJob.overallMatchScore || currentJob.finalScore || 0;
+  // Use finalScore as primary score (0-100), fallback to overallMatchScore for backward compatibility
+  const matchScore = currentJob.finalScore ?? currentJob.overallMatchScore ?? 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
@@ -150,7 +151,8 @@ export default function JobMatchesPage() {
             {/* Left Side - Job List */}
             <div className="md:col-span-1 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
           {matches.map((job, index) => {
-            const jobMatchScore = job.overallMatchScore || job.finalScore || 0;
+            // Use finalScore as primary score (0-100), fallback to overallMatchScore for backward compatibility
+            const jobMatchScore = job.finalScore ?? job.overallMatchScore ?? 0;
             return (
               <div
                 key={index}

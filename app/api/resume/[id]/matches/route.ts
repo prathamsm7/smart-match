@@ -9,16 +9,16 @@ export async function GET(
   try {
     const { id: resumeId } = await params;
 
-    // const cachedKey = `jobs:${resumeId}`;
-    // const cachedData = await redisClient.get(cachedKey);
+    const cachedKey = `jobs:${resumeId}`;
+    const cachedData = await redisClient.get(cachedKey);
 
     //!TODO: Uncomment this when we have a way to cache the matches
-    // if (cachedData) {
-    //   return NextResponse.json({
-    //     success: true,
-    //     matches: cachedData,
-    //   });
-    // }
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        matches: cachedData,
+      });
+    }
 
     if (!resumeId) {
       return NextResponse.json(
@@ -57,7 +57,7 @@ export async function GET(
       }
     }
 
-    // await redisClient.set(cachedKey, JSON.stringify(matches), { ex: 600 });
+    await redisClient.set(cachedKey, JSON.stringify(matches), { ex: 300 });
 
     return NextResponse.json({
       success: true,

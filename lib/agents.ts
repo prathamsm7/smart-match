@@ -351,7 +351,7 @@ const searchJobs = tool({
                 resumeVec = resumeResult[0].vector;
                 resumeInfo = resumeResult[0].payload;
 
-                await redisClient.set(cacheKey, JSON.stringify({resumeData: resumeInfo, vector: resumeVec}), { ex: 7 * 24 * 60 * 60 });
+                await redisClient.set(cacheKey, JSON.stringify({resumeData: resumeInfo, vector: resumeVec}), { ex: 60 * 60 });
 
             }
 
@@ -387,11 +387,14 @@ const searchJobs = tool({
                     const reasoning = await explainMatchAndSkillGap(resumeInfo, match.payload);
 
                     const vectorScore = match.score;
-                    const finalScore = Number((
+                    // Calculate finalScore as weighted combination (0-1 range)
+                    const finalScoreRaw = Number((
                         vectorScore * 0.65 +
                         skillRatio * 0.25 +
                         experienceRatio * 0.05
                     ).toFixed(3));
+                    // Normalize finalScore to 0-100 for consistency with overallMatchScore
+                    const finalScore = Math.round(finalScoreRaw * 100);
 
                     return {
                         jobTitle: match.payload.jobTitle,
@@ -406,16 +409,17 @@ const searchJobs = tool({
                         jobResponsibilities: match.payload.jobResponsibilities,
                         // Match analysis
                         ...reasoning,
-                        // Scores
+                        // Scores - finalScore is now 0-100 (primary score for sorting)
                         finalScore,
-                        vectorScore,
-                        skillScore: skillRatio,
-                        expRelevanceScore: experienceRatio,
+                        vectorScore: Math.round(vectorScore * 100), // Also normalize to 0-100 for display
+                        skillScore: Math.round(skillRatio * 100), // Also normalize to 0-100 for display
+                        expRelevanceScore: Math.round(experienceRatio * 100), // Also normalize to 0-100 for display
                     };
                 })
             );
 
-            enhancedResults.sort((a: any, b: any) => b.overallMatchScore - a.overallMatchScore);
+            // Sort by finalScore (primary overall match score) in descending order
+            enhancedResults.sort((a: any, b: any) => b.finalScore - a.finalScore);
 
             return enhancedResults;
         } catch (error: any) {
@@ -461,6 +465,8 @@ const masterResumeAgent = new Agent({
             - "resumeId" MUST come from the uploadResume tool call result.
             - "matches" MUST come from the searchJobs tool call result (only if job search was performed).
             - Do NOT return plain arrays or any other structure; always wrap in the JSON object above.
+
+            CRITICAL: When you receive the result from searchJobs, DO NOT generate a text summary. Output the JSON tool result immediately as your final answer.
     `,
     tools: [extractResumeData, uploadResume, searchJobs],
 });
