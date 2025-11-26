@@ -9,6 +9,7 @@ import resumeSchema from './schema.js';
 import { normalizeExperienceScore } from './helpers.js';
 import OpenAI from 'openai';
 import redisClient from './redisClient.js';
+import { prisma } from './prisma.js';
 
 // Gemini client for LLM calls
 const geminiClient = new OpenAI({
@@ -284,11 +285,23 @@ async function calculateSkillAndExperienceMatch(resume: any, job: any) {
                 { role: "system", content: "You are an expert recruiter. Analyze candidate-job match and return JSON only." },
                 { role: "user", content: prompt }
             ],
-            temperature: 0.2
+            temperature: 0.2,
+            response_format: { type: "json_object" }
         });
 
         const raw = res.choices?.[0]?.message?.content?.trim() || '';
-        const result = JSON.parse(raw);
+        
+        // Clean markdown code fences if present (```json ... ```)
+        let cleaned = raw;
+        if (cleaned.startsWith('```')) {
+            // Remove opening ```json or ```
+            cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, '');
+            // Remove closing ```
+            cleaned = cleaned.replace(/\n?```\s*$/i, '');
+        }
+        cleaned = cleaned.trim();
+        
+        const result = JSON.parse(cleaned);
 
         return {
             matchedSkills: result.matchedSkills || [],
@@ -364,12 +377,12 @@ const searchJobs = tool({
             const experienceScore = normalizeExperienceScore(totalYears);
             console.log(`🧾 Total experience: ${totalYears} years (normalized: ${experienceScore})`);
 
-            // ✅ Vector similarity from Qdrant
+            // ✅ Vector similarity from Qdrant - get jobIds and scores only
             const matches = await qdrantClient.search("jobs", {
                 vector: resumeVec,
                 limit: 5,
-                with_payload: true,
-                with_vector: false, // We don't need vectors in the response
+                with_payload: true, // Contains only jobId
+                with_vector: false,
             });
 
             if (!matches || matches.length === 0) {
@@ -377,16 +390,57 @@ const searchJobs = tool({
                 return [];
             }
 
-            console.log(`✅ Found ${matches.length} job matches`);
+            console.log(`✅ Found ${matches.length} job matches from Qdrant`);
 
+            // Extract jobIds from matches
+            const jobIds = matches.map((match: any) => match.payload.id).filter(Boolean);
+
+            if (jobIds.length === 0) {
+                console.log("⚠️  No valid job IDs found in matches");
+                return [];
+            }
+
+            // Fetch full job data from PostgreSQL
+            const jobs = await prisma.job.findMany({
+                where: {
+                    id: { in: jobIds },
+                },
+            });
+
+            console.log(`✅ Fetched ${jobs.length} jobs from PostgreSQL`);
+
+            // Create a map for quick lookup
+            const jobMap = new Map(jobs.map(job => [job.id, job]));
+
+            // Create a map of vector scores by jobId
+            const scoreMap = new Map(matches.map((match: any) => [match.payload.id, match.score]));
+
+            // Process matches with full data from PostgreSQL
             const enhancedResults = await Promise.all(
                 matches.map(async (match: any) => {
+                    const jobId = match.payload.id;
+                    const job = jobMap.get(jobId);
+                    
+                    if (!job) {
+                        console.warn(`⚠️  Job ${jobId} not found in PostgreSQL, skipping`);
+                        return null;
+                    }
+
+                    // Prepare job data for matching functions
+                    const jobDataForMatching = {
+                        jobTitle: job.title,
+                        jobDescription: job.description || '',
+                        jobRequirements: job.requirements,
+                        jobResponsibilities: job.responsibilities || '',
+                        employerName: job.employerName || '',
+                    };
+
                     const { matchedSkills, skillRatio, experienceRatio } =
-                        await calculateSkillAndExperienceMatch(resumeInfo, match.payload);
+                        await calculateSkillAndExperienceMatch(resumeInfo, jobDataForMatching);
 
-                    const reasoning = await explainMatchAndSkillGap(resumeInfo, match.payload);
+                    const reasoning = await explainMatchAndSkillGap(resumeInfo, jobDataForMatching);
 
-                    const vectorScore = match.score;
+                    const vectorScore = scoreMap.get(jobId) || 0;
                     // Calculate finalScore as weighted combination (0-1 range)
                     const finalScoreRaw = Number((
                         vectorScore * 0.65 +
@@ -397,16 +451,17 @@ const searchJobs = tool({
                     const finalScore = Math.round(finalScoreRaw * 100);
 
                     return {
-                        jobTitle: match.payload.jobTitle,
-                        employerName: match.payload.employerName,
-                        jobLocation: match.payload.jobLocation,
-                        // Additional job details if available
-                        jobDescription: match.payload.jobDescription,
-                        jobApplyLink: match.payload.jobApplyLink,
-                        jobEmploymentType: match.payload.jobEmploymentType,
-                        jobSalary: match.payload.jobSalary,
-                        jobRequirements: match.payload.jobRequirements,
-                        jobResponsibilities: match.payload.jobResponsibilities,
+                        id: job.id,
+                        jobId: job.id,
+                        jobTitle: job.title,
+                        employerName: job.employerName,
+                        jobLocation: job.location,
+                        jobDescription: job.description,
+                        jobApplyLink: job.applyLink,
+                        jobEmploymentType: job.employmentType,
+                        jobSalary: job.salary,
+                        jobRequirements: job.requirements,
+                        jobResponsibilities: job.responsibilities,
                         // Match analysis
                         ...reasoning,
                         // Scores - finalScore is now 0-100 (primary score for sorting)
@@ -418,10 +473,13 @@ const searchJobs = tool({
                 })
             );
 
-            // Sort by finalScore (primary overall match score) in descending order
-            enhancedResults.sort((a: any, b: any) => b.finalScore - a.finalScore);
+            // Filter out null results (jobs not found in PostgreSQL)
+            const validResults = enhancedResults.filter((result: any) => result !== null);
 
-            return enhancedResults;
+            // Sort by finalScore (primary overall match score) in descending order
+            validResults.sort((a: any, b: any) => b.finalScore - a.finalScore);
+
+            return validResults;
         } catch (error: any) {
             console.error("❌ Error in searchJobs tool:", error);
             throw new Error(`Job search failed: ${error.message}`);
@@ -513,6 +571,87 @@ const masterResumeAgent = new Agent({
     return result;
 }
 
+/**
+ * Store job in both PostgreSQL and Qdrant
+ * - Full data in PostgreSQL
+ * - Only vector embedding in Qdrant (with jobId reference)
+ */
+export interface JobData {
+    id?: string; // Optional - will generate if not provided
+    title: string;
+    employerName?: string;
+    description?: string;
+    requirements?: any;
+    location?: string;
+    salary?: string;
+    employmentType?: string;
+    applyLink?: string;
+    responsibilities?: string;
+    postedBy?: string; // User ID of the recruiter who posted this job
+}
+
+export async function storeJob(jobData: JobData): Promise<string> {
+    try {
+        
+        // 2. Create vector text for embedding
+        const vectorText = [
+            jobData.title,
+            jobData.employerName,
+            jobData.description,
+            // Handle responsibilities (can be string, array, or object)
+            Array.isArray(jobData.responsibilities)
+                ? jobData.responsibilities.join(' ')
+                : typeof jobData.responsibilities === 'object' && jobData.responsibilities !== null
+                    ? JSON.stringify(jobData.responsibilities)
+                    : String(jobData.responsibilities || ''),
+            // Handle requirements (can be array or object)
+            Array.isArray(jobData.requirements) 
+                ? jobData.requirements.join(' ')
+                : typeof jobData.requirements === 'object' && jobData.requirements !== null
+                    ? JSON.stringify(jobData.requirements)
+                    : String(jobData.requirements || ''),
+        ].filter(Boolean).join(' ');
+
+        // 3. Generate embedding
+        const vector = await embedText(vectorText);
+
+        // 4. Store in PostgreSQL (upsert - create or update)
+        const job = await prisma.job.create({
+            data: {
+                title: jobData.title,
+                employerName: jobData.employerName || null,
+                description: jobData.description || null,
+                requirements: jobData.requirements || null,
+                location: jobData.location || null,
+                salary: jobData.salary || null,
+                employmentType: jobData.employmentType || null,
+                applyLink: jobData.applyLink || null,
+                responsibilities: jobData.responsibilities || null,
+                postedBy: jobData.postedBy || null,
+            },
+        });
+
+        // 5. Store ONLY vector + jobId in Qdrant (no full payload)
+        await qdrantClient.upsert('jobs', {
+            points: [
+                {
+                    id: job.id, // Same ID as PostgreSQL
+                    vector: vector,
+                    payload: {
+                        id: job.id, // Only store jobId in payload for reference
+                    },
+                },
+            ],
+        });
+
+        console.log(`✅ Stored job ${job.id} in PostgreSQL and Qdrant`);
+        return job.id;
+    } catch (error: any) {
+        console.error('❌ Error storing job:', error);
+        throw new Error(`Failed to store job: ${error.message}`);
+    }
+}
+
 // Export qdrantClient for use in API routes
-export { qdrantClient,runMasterAgent };
+export { qdrantClient, runMasterAgent };
 

@@ -25,6 +25,8 @@ interface JobMatch {
   posted: string;
   applicants: number;
   skills: string[];
+  requirements?: any;
+  jobApplyLink?: string;
 }
 
 interface JobMatchesViewProps {
@@ -38,6 +40,9 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
   const [selectedJob, setSelectedJob] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
   const [primaryResumeId, setPrimaryResumeId] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [applySuccess, setApplySuccess] = useState(false);
 
   // Fetch primary resume and then job matches
   useEffect(() => {
@@ -140,6 +145,8 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
           suggestions: suggestions,
           posted: job.posted || 'Recently',
           applicants: job.applicants || 0,
+          requirements: job.jobRequirements || null,
+          jobApplyLink: job.jobApplyLink || undefined,
         };
       });
 
@@ -152,6 +159,66 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
       setError(err.message || 'Failed to load job matches');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleApplyNow(job: JobMatch) {
+    try {
+      setApplying(true);
+      setApplyError(null);
+      setApplySuccess(false);
+
+      if (!primaryResumeId) {
+        setApplyError('No primary resume found. Please set a primary resume first.');
+        return;
+      }
+
+      const response = await fetch('/api/applications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobId: job.id,
+          resumeId: primaryResumeId,
+          jobTitle: job.title,
+          employerName: job.company,
+          jobDescription: job.description,
+          jobRequirements: job.requirements || null,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to apply for job');
+      }
+
+      // Success!
+      setApplySuccess(true);
+      
+      // If job has external link, open it after a short delay
+      if (job.jobApplyLink) {
+        setTimeout(() => {
+          window.open(job.jobApplyLink, '_blank', 'noopener,noreferrer');
+        }, 500);
+      }
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setApplySuccess(false);
+      }, 3000);
+
+    } catch (error: any) {
+      console.error('Error applying for job:', error);
+      setApplyError(error.message || 'Failed to apply for job');
+      
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        setApplyError(null);
+      }, 5000);
+    } finally {
+      setApplying(false);
     }
   }
 
@@ -372,10 +439,47 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
                 </div>
               </div>
 
+              {/* Application Status Messages */}
+              {applyError && (
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center space-x-2">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  <p className="text-red-400 text-sm">{applyError}</p>
+                </div>
+              )}
+
+              {applySuccess && (
+                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  <p className="text-green-400 text-sm">Application submitted successfully!</p>
+                </div>
+              )}
+
               <div className="flex gap-3">
-                <button className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/50 transition transform hover:scale-[1.02] flex items-center justify-center space-x-2">
-                  <span>Apply Now</span>
-                  <ArrowRight className="w-5 h-5" />
+                <button 
+                  onClick={() => handleApplyNow(currentJob)}
+                  disabled={applying || applySuccess}
+                  className={`flex-1 px-6 py-3 rounded-lg font-semibold transition transform hover:scale-[1.02] flex items-center justify-center space-x-2 ${
+                    applying || applySuccess
+                      ? 'bg-green-600 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:shadow-lg hover:shadow-blue-500/50'
+                  }`}
+                >
+                  {applying ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span>Applying...</span>
+                    </>
+                  ) : applySuccess ? (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      <span>Applied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Apply Now</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
                 <button className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold transition flex items-center space-x-2">
                   <Star className="w-5 h-5" />

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runMasterAgent } from '@/lib/backend';
-import { extractTextFromPDFBuffer } from '@/lib/agents';
+import { extractTextFromPDFBuffer, qdrantClient } from '@/lib/agents';
 import { prisma } from '@/lib/prisma';
 import { createServerSupabase } from '@/lib/superbase/server';
 
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     // { "resumeId": "<id>", "matches": [...] }
     let resumeId: string | null = null;
     let parsedOutput: any = null;
+    let resumeData: any = null;
 
     if (result.finalOutput) {
       try {
@@ -74,6 +75,23 @@ export async function POST(request: NextRequest) {
         resumeId = parsedOutput?.resumeId || null;
       } catch {
         // If parsing fails, we fall back to toolCalls below
+      }
+    }
+
+    // Extract resumeData from extractResumeData tool call
+    if (!resumeData) {
+      try {
+        // Retrieve from Qdrant using the resumeId
+        const qdrantResult = await qdrantClient.retrieve('resumes', {
+          ids: [resumeId as string],
+          with_payload: true,
+        });
+        
+        if (qdrantResult && qdrantResult.length > 0) {
+          resumeData = qdrantResult[0].payload;
+        }
+      } catch (error) {
+        console.error('Error retrieving resume from Qdrant:', error);
       }
     }
 
@@ -85,6 +103,7 @@ export async function POST(request: NextRequest) {
         for (const call of resultAny.toolCalls) {
           const toolName = call.toolName || call.name;
           const toolResult = call.result || call.output || call.data;
+
           if (toolName === 'uploadResume' && toolResult?.resumeId) {
             resumeId = toolResult.resumeId;
             break;
@@ -93,7 +112,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log("🚀 ~ POST ~ resumeId:", resumeId)
     if (!resumeId) {
       return NextResponse.json(
         { error: 'Failed to create resume. Please try again.' },
@@ -101,10 +119,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("🚀 ~ POST ~ resumeData:", resumeData)
     const resume = await prisma.resume.create({
       data: {
         userId: dbUser.id,
-        vectorId: resumeId
+        vectorId: resumeId,
+        json: resumeData
       },
     });
 

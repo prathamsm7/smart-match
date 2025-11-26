@@ -17,8 +17,10 @@ model User {
   id           String           @id @default(uuid())
   email        String           @unique
   name         String?
+  role         String           @default("candidate") // "candidate" or "recruiter"
   resumes      Resume[]
   applications JobApplication[]
+  postedJobs   Job[]            @relation("JobPoster")
   createdAt    DateTime         @default(now())
 }
 
@@ -34,12 +36,19 @@ model Resume {
 }
 
 model Job {
-  id              String   @id
-  title           String
-  employerName    String?
-  jobDescription  String?
-  jobRequirements Json?
-  createdAt       DateTime @default(now())
+  id            String   @id @default(uuid())
+  title               String
+  employerName        String?
+  description      String?
+  requirements     Json?
+  location         String?
+  salary           String?
+  employmentType   String?
+  applyLink        String?
+  responsibilities Json?
+  postedBy       String? // User ID of the recruiter who posted this job
+  poster         User?   @relation("JobPoster", fields: [postedBy], references: [id])
+  createdAt           DateTime @default(now())
 
   applications JobApplication[]
 }

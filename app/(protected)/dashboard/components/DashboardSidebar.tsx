@@ -12,13 +12,15 @@ import {
   LogOut,
   Rocket,
   BarChart3,
+  ClipboardList,
 } from 'lucide-react';
 import { getUserInitials, getUserDisplayName, getUserTitle } from './utils/userHelpers';
 
-export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings';
+export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings' | 'jobs' | 'test';
 
 interface DashboardSidebarProps {
   user: any;
+  userRole?: string;
   sidebarOpen: boolean;
   signingOut: boolean;
   onSignOut: () => void;
@@ -28,6 +30,7 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({
   user,
+  userRole = 'candidate',
   sidebarOpen,
   signingOut,
   onSignOut,
@@ -36,19 +39,32 @@ export function DashboardSidebar({
 }: DashboardSidebarProps) {
   const userInitials = getUserInitials(user);
   const userDisplayName = getUserDisplayName(user);
-  const userTitle = getUserTitle();
+  const userTitle = userRole === 'recruiter' ? 'Recruiter' : getUserTitle();
 
-  const navigationItems = [
+  // Candidate navigation items (badges removed - use real data from API)
+  const candidateItems = [
     { icon: <BarChart3 className="w-5 h-5" />, label: "Dashboard", view: 'overview' as DashboardView, badge: null },
-    { icon: <Briefcase className="w-5 h-5" />, label: "Job Matches", view: 'job-matches' as DashboardView, badge: "48" },
-    { icon: <FileText className="w-5 h-5" />, label: "My Resumes", view: 'resumes' as DashboardView, badge: "3" },
-    { icon: <Briefcase className="w-5 h-5" />, label: "Applications", view: 'applications' as DashboardView, badge: "12" },
-    { icon: <Calendar className="w-5 h-5" />, label: "Interviews", view: 'interviews' as DashboardView, badge: "5" },
+    { icon: <Briefcase className="w-5 h-5" />, label: "Job Matches", view: 'job-matches' as DashboardView, badge: null },
+    { icon: <FileText className="w-5 h-5" />, label: "My Resumes", view: 'resumes' as DashboardView, badge: null },
+    { icon: <Briefcase className="w-5 h-5" />, label: "Applications", view: 'applications' as DashboardView, badge: null },
+    { icon: <Calendar className="w-5 h-5" />, label: "Interviews", view: 'interviews' as DashboardView, badge: null },
     { icon: <Users className="w-5 h-5" />, label: "Network", view: 'network' as DashboardView, badge: null },
     { icon: <User className="w-5 h-5" />, label: "Profile", view: 'profile' as DashboardView, badge: null },
-    { icon: <Bell className="w-5 h-5" />, label: "Notifications", view: 'notifications' as DashboardView, badge: "3" },
+    { icon: <Bell className="w-5 h-5" />, label: "Notifications", view: 'notifications' as DashboardView, badge: null },
     { icon: <Settings className="w-5 h-5" />, label: "Settings", view: 'settings' as DashboardView, badge: null },
   ];
+
+  // Recruiter navigation items
+  const recruiterItems = [
+    { icon: <BarChart3 className="w-5 h-5" />, label: "Dashboard", view: 'overview' as DashboardView, badge: null },
+    { icon: <ClipboardList className="w-5 h-5" />, label: "My Jobs", view: 'jobs' as DashboardView, badge: null },
+    { icon: <Users className="w-5 h-5" />, label: "Candidates", view: 'network' as DashboardView, badge: null },
+    { icon: <User className="w-5 h-5" />, label: "Profile", view: 'profile' as DashboardView, badge: null },
+    { icon: <Bell className="w-5 h-5" />, label: "Notifications", view: 'notifications' as DashboardView, badge: null },
+    { icon: <Settings className="w-5 h-5" />, label: "Settings", view: 'settings' as DashboardView, badge: null },
+  ];
+
+  const navigationItems = userRole === 'recruiter' ? recruiterItems : candidateItems;
 
   return (
     <aside
