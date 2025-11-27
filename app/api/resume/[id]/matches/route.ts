@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { runMasterAgent } from '@/lib/agents';
+import { searchJobsForResume } from '@/lib/jobHelper';
 import redisClient from '@/lib/redisClient';
 
 export async function GET(
@@ -9,17 +9,6 @@ export async function GET(
   try {
     const { id: resumeId } = await params;
 
-    const cachedKey = `jobs:${resumeId}`;
-    const cachedData = await redisClient.get(cachedKey);
-
-    //!TODO: Uncomment this when we have a way to cache the matches
-    if (cachedData) {
-      return NextResponse.json({
-        success: true,
-        matches: cachedData,
-      });
-    }
-
     if (!resumeId) {
       return NextResponse.json(
         { error: 'Resume ID is required' },
@@ -27,41 +16,29 @@ export async function GET(
       );
     }
 
-    // Call the master agent to search for jobs
-    const result = await runMasterAgent({
-      source: 'id',
-      resumeId,
-    });
+    // Check cache first
+    const cachedKey = `jobs:${resumeId}`;
+    const cachedData = await redisClient.get(cachedKey);
 
-    // Extract matches from the result
-    let matches: any[] = [];
-
-    // Try to extract from tool calls first (most reliable)
-    const resultAny = result as any;
-    if (resultAny.toolCalls) {
-      for (const call of resultAny.toolCalls) {
-        if (call.toolName === 'searchJobs' && call.result) {
-          matches = Array.isArray(call.result) ? call.result : [];
-          break;
-        }
-      }
+    if (cachedData) {
+      const matches = typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData;
+      return NextResponse.json({
+        success: true,
+        matches,
+        cached: true,
+      });
     }
 
-    // Fallback: try to parse from finalOutput if no tool calls found
-    if (matches.length === 0 && result.finalOutput) {
-      try {
-        const output = JSON.parse(result.finalOutput);
-        matches = Array.isArray(output) ? output : output.matches || [];
-      } catch {
-        // If parsing fails, matches stays empty
-      }
-    }
+    // Call searchJobsForResume directly (bypasses agent framework for speed)
+    const matches = await searchJobsForResume(resumeId);
 
+    // Cache results for 5 minutes
     await redisClient.set(cachedKey, JSON.stringify(matches), { ex: 300 });
 
     return NextResponse.json({
       success: true,
       matches,
+      cached: false,
     });
   } catch (error: any) {
     console.error('Error fetching job matches:', error);

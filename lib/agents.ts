@@ -17,6 +17,10 @@ const geminiClient = new OpenAI({
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
 });
 
+const openaiClient = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+
 const qdrantClient = new QdrantClient({
     url: process.env.QDRANT_URL,
     apiKey: process.env.QDRANT_API_KEY
@@ -191,8 +195,8 @@ async function explainMatchAndSkillGap(resume: any, job: any) {
     `;
 
     try {
-        const res = await geminiClient.chat.completions.create({
-            model: "gemini-2.0-flash",
+        const res = await openaiClient.chat.completions.create({
+            model: "gpt-4o-mini",
             messages: [{ role: "user", content: prompt }],
             temperature: 0.2,
             response_format: { type: "json_object" },
@@ -279,8 +283,8 @@ async function calculateSkillAndExperienceMatch(resume: any, job: any) {
     `;
 
     try {
-        const res = await geminiClient.chat.completions.create({
-            model: "gemini-2.5-flash",
+        const res = await openaiClient.chat.completions.create({
+            model: "gpt-4o-mini",
             messages: [
                 { role: "system", content: "You are an expert recruiter. Analyze candidate-job match and return JSON only." },
                 { role: "user", content: prompt }
@@ -409,77 +413,47 @@ const searchJobs = tool({
 
             console.log(`✅ Fetched ${jobs.length} jobs from PostgreSQL`);
 
-            // Create a map for quick lookup
-            const jobMap = new Map(jobs.map(job => [job.id, job]));
+            // Create a map for quick lookup with proper typing
+            type JobType = typeof jobs[number];
+            const jobMap = new Map<string, JobType>(jobs.map((job: JobType) => [job.id, job]));
 
             // Create a map of vector scores by jobId
-            const scoreMap = new Map(matches.map((match: any) => [match.payload.id, match.score]));
+            const scoreMap = new Map<string, number>(matches.map((match: any) => [match.payload.id, match.score]));
 
-            // Process matches with full data from PostgreSQL
-            const enhancedResults = await Promise.all(
-                matches.map(async (match: any) => {
-                    const jobId = match.payload.id;
-                    const job = jobMap.get(jobId);
-                    
-                    if (!job) {
-                        console.warn(`⚠️  Job ${jobId} not found in PostgreSQL, skipping`);
-                        return null;
-                    }
+            // Process matches with full data from PostgreSQL - NO LLM calls for speed
+            // Detailed analysis (skills, match explanation) is lazy-loaded via /api/resume/[id]/matches/[jobId]
+            const results = matches.map((match: any) => {
+                const jobId = match.payload.id as string;
+                const job = jobMap.get(jobId);
+                
+                if (!job) {
+                    console.warn(`⚠️  Job ${jobId} not found in PostgreSQL, skipping`);
+                    return null;
+                }
 
-                    // Prepare job data for matching functions
-                    const jobDataForMatching = {
-                        jobTitle: job.title,
-                        jobDescription: job.description || '',
-                        jobRequirements: job.requirements,
-                        jobResponsibilities: job.responsibilities || '',
-                        employerName: job.employerName || '',
-                    };
+                const vectorScore = scoreMap.get(jobId) || 0;
 
-                    const { matchedSkills, skillRatio, experienceRatio } =
-                        await calculateSkillAndExperienceMatch(resumeInfo, jobDataForMatching);
+                return {
+                    id: job.id,
+                    jobId: job.id,
+                    jobTitle: job.title,
+                    employerName: job.employerName,
+                    jobLocation: job.location,
+                    jobDescription: job.description,
+                    jobApplyLink: job.applyLink,
+                    jobEmploymentType: job.employmentType,
+                    jobSalary: job.salary,
+                    jobRequirements: job.requirements,
+                    jobResponsibilities: job.responsibilities,
+                    // Vector score only - detailed analysis loaded on demand
+                    vectorScore: Math.round(vectorScore * 100),
+                };
+            }).filter(Boolean);
 
-                    const reasoning = await explainMatchAndSkillGap(resumeInfo, jobDataForMatching);
+            // Sort by vectorScore in descending order
+            results.sort((a: any, b: any) => b.vectorScore - a.vectorScore);
 
-                    const vectorScore = scoreMap.get(jobId) || 0;
-                    // Calculate finalScore as weighted combination (0-1 range)
-                    const finalScoreRaw = Number((
-                        vectorScore * 0.65 +
-                        skillRatio * 0.25 +
-                        experienceRatio * 0.05
-                    ).toFixed(3));
-                    // Normalize finalScore to 0-100 for consistency with overallMatchScore
-                    const finalScore = Math.round(finalScoreRaw * 100);
-
-                    return {
-                        id: job.id,
-                        jobId: job.id,
-                        jobTitle: job.title,
-                        employerName: job.employerName,
-                        jobLocation: job.location,
-                        jobDescription: job.description,
-                        jobApplyLink: job.applyLink,
-                        jobEmploymentType: job.employmentType,
-                        jobSalary: job.salary,
-                        jobRequirements: job.requirements,
-                        jobResponsibilities: job.responsibilities,
-                        // Match analysis
-                        ...reasoning,
-                        // Scores - finalScore is now 0-100 (primary score for sorting)
-                        finalScore,
-                        vectorScore: Math.round(vectorScore * 100), // Also normalize to 0-100 for display
-                        skillScore: Math.round(skillRatio * 100), // Also normalize to 0-100 for display
-                        expRelevanceScore: Math.round(experienceRatio * 100), // Also normalize to 0-100 for display
-                    };
-                })
-            );
-
-            // Filter out null results (jobs not found in PostgreSQL)
-            const validResults = enhancedResults.filter((result: any) => result !== null);
-
-            // Sort by finalScore (primary overall match score) in descending order
-            validResults.sort((a: any, b: any) => b.finalScore - a.finalScore);
-
-            return validResults;
+            return results;
         } catch (error: any) {
             console.error("❌ Error in searchJobs tool:", error);
             throw new Error(`Job search failed: ${error.message}`);
@@ -652,6 +626,6 @@ export async function storeJob(jobData: JobData): Promise<string> {
     }
 }
 
-// Export qdrantClient for use in API routes
-export { qdrantClient, runMasterAgent };
+// Export qdrantClient and helper functions for use in API routes
+export { qdrantClient, runMasterAgent, calculateSkillAndExperienceMatch, explainMatchAndSkillGap, embedText };
 

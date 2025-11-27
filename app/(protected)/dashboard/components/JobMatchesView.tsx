@@ -43,6 +43,10 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applySuccess, setApplySuccess] = useState(false);
+  
+  // Lazy loading state for job details
+  const [jobDetails, setJobDetails] = useState<Record<string, any>>({});
+  const [loadingDetails, setLoadingDetails] = useState<string | null>(null);
 
   // Fetch primary resume and then job matches
   useEffect(() => {
@@ -54,54 +58,31 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
       setLoading(true);
       setError(null);
 
-      // First, get the primary resume
-      const resumesResponse = await fetch('/api/resumes');
-      const resumesData = await resumesResponse.json();
-
-      if (!resumesResponse.ok) {
-        throw new Error(resumesData.error || 'Failed to fetch resumes');
-      }
-
-      const primaryResume = resumesData.resumes.find((r: any) => r.isPrimary);
-      
-      if (!primaryResume || !primaryResume.vectorId) {
-        setError('No primary resume found. Please set a primary resume first.');
-        setLoading(false);
-        return;
-      }
-
-      setPrimaryResumeId(primaryResume.vectorId);
-
-      // Fetch job matches using the primary resume's vectorId
-      const matchesResponse = await fetch(`/api/resume/${primaryResume.vectorId}/matches`);
+      // Fetch job matches - backend finds primary resume automatically
+      const matchesResponse = await fetch('/api/jobs/matches');
       const matchesData = await matchesResponse.json();
 
       if (!matchesResponse.ok) {
         throw new Error(matchesData.error || 'Failed to fetch job matches');
       }
 
+      // Set the resume ID from the response (needed for detail fetching)
+      setPrimaryResumeId(matchesData.resumeId);
+
       // Transform API response to component format
+      // Note: Initial load only has vectorScore, detailed analysis is lazy-loaded
       const transformedJobs = matchesData.matches.map((job: any, index: number) => {
         // Extract company name from employerName or use a default
         const companyName = job.employerName || 'Company';
         const companyInitial = companyName.charAt(0).toUpperCase();
 
-        // Calculate match score - finalScore is now 0-100 (normalized in backend)
-        const matchScore = job?.finalScore ?? "NA";
+        // Use vectorScore initially, finalScore will be updated when details are fetched
+        const matchScore = job.vectorScore ?? 0;
         
-        // Matched skills (from the match analysis)
-        const matchedSkills = job.matchedSkills || []
-
-        // Missing skills (from the match analysis)
-        const missingSkills = job.missingSkills || [];
-
-        // Suggestions (from the match analysis)
-        const suggestions = job.improvementSuggestions || 
-                           [
-                             `Focus on developing ${missingSkills[0] || 'additional'} skills to improve your match.`,
-                             `Gain more experience with ${job.type || 'relevant'} technologies.`,
-                             `Consider certifications or courses in key areas.`
-                           ];
+        // These will be populated when details are lazy-loaded
+        const matchedSkills: string[] = [];
+        const missingSkills: string[] = [];
+        const suggestions: string[] = [];
 
         // Format description - convert \n to proper line breaks
         let description = job.jobDescription || ""
@@ -197,13 +178,6 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
 
       // Success!
       setApplySuccess(true);
-      
-      // If job has external link, open it after a short delay
-      if (job.jobApplyLink) {
-        setTimeout(() => {
-          window.open(job.jobApplyLink, '_blank', 'noopener,noreferrer');
-        }, 500);
-      }
 
       // Clear success message after 3 seconds
       setTimeout(() => {
@@ -222,6 +196,50 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
       setApplying(false);
     }
   }
+
+  // Fetch detailed job analysis (lazy loading)
+  async function fetchJobDetails(jobId: string, vectorScore: number) {
+    // Skip if already fetched or currently loading
+    if (jobDetails[jobId] || loadingDetails === jobId) {
+      return;
+    }
+
+    if (!primaryResumeId) {
+      console.error('No primary resume ID available');
+      return;
+    }
+
+    try {
+      setLoadingDetails(jobId);
+      
+      // Send vectorScore in POST body (already computed by Qdrant in initial search)
+      const response = await fetch(`/api/resume/${primaryResumeId}/matches/${jobId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vectorScore }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch job details');
+      }
+
+      // Update job details cache (used for detail view only)
+      setJobDetails(prev => ({ ...prev, [jobId]: data.match }));
+    } catch (err: any) {
+      console.error('Error fetching job details:', err);
+    } finally {
+      setLoadingDetails(null);
+    }
+  }
+
+  // Fetch details when job is selected
+  useEffect(() => {
+    if (jobs.length > 0 && jobs[selectedJob]) {
+      const currentJob = jobs[selectedJob];
+      fetchJobDetails(currentJob.id, currentJob.matchScore);
+    }
+  }, [selectedJob, jobs.length, primaryResumeId]);
 
   // Loading state
   if (loading) {
@@ -346,16 +364,7 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
                     {job.company}
                   </p>
                 </div>
-                <div className="text-right">
-                  <div className={`text-2xl font-bold ${
-                    job.matchScore >= 90 ? 'text-green-400' : 
-                    job.matchScore >= 80 ? 'text-yellow-400' : 
-                    'text-orange-400'
-                  }`}>
-                    {job.matchScore}%
-                  </div>
-                  <span className="text-xs text-gray-400">Match</span>
-                </div>
+                {/* Score is shown only in job details, not in card list */}
               </div>
 
 
@@ -410,32 +419,50 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
                 </div>
                 <div className="text-center">
                   <div className="relative w-32 h-32">
-                    <svg className="transform -rotate-90 w-32 h-32">
-                      <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-slate-700" />
-                      <circle
-                        cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="10" fill="transparent"
-                        strokeDasharray={`${2 * Math.PI * 56}`}
-                        strokeDashoffset={`${2 * Math.PI * 56 * (1 - currentJob.matchScore / 100)}`}
-                        className={`${
-                          currentJob.matchScore >= 90 ? 'text-green-400' : 
-                          currentJob.matchScore >= 80 ? 'text-yellow-400' : 
-                          'text-orange-400'
-                        } transition-all duration-1000`}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className={`text-4xl font-bold ${
-                          currentJob.matchScore >= 90 ? 'text-green-400' : 
-                          currentJob.matchScore >= 80 ? 'text-yellow-400' : 
-                          'text-orange-400'
-                        }`}>
-                          {currentJob.matchScore}%
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">Match</div>
+                    {loadingDetails === currentJob.id ? (
+                      // Loading state
+                      <div className="w-32 h-32 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-500"></div>
                       </div>
-                    </div>
+                    ) : jobDetails[currentJob.id] ? (
+                      // Score loaded - show progress ring
+                      <>
+                        <svg className="transform -rotate-90 w-32 h-32">
+                          <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-slate-700" />
+                          <circle
+                            cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="10" fill="transparent"
+                            strokeDasharray={`${2 * Math.PI * 56}`}
+                            strokeDashoffset={`${2 * Math.PI * 56 * (1 - currentJob.matchScore / 100)}`}
+                            className={`${
+                              currentJob.matchScore >= 90 ? 'text-green-400' : 
+                              currentJob.matchScore >= 80 ? 'text-yellow-400' : 
+                              'text-orange-400'
+                            } transition-all duration-1000`}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-center">
+                            <div className={`text-4xl font-bold ${
+                              currentJob.matchScore >= 90 ? 'text-green-400' : 
+                              currentJob.matchScore >= 80 ? 'text-yellow-400' : 
+                              'text-orange-400'
+                            }`}>
+                              {currentJob.matchScore}%
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">Match</div>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      // Not yet loaded - show placeholder
+                      <div className="w-32 h-32 flex items-center justify-center border-4 border-dashed border-slate-600 rounded-full">
+                        <div className="text-center">
+                          <Target className="w-8 h-8 text-slate-500 mx-auto mb-1" />
+                          <div className="text-xs text-gray-500">Analyzing...</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -516,58 +543,78 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
               </div>
             </div>
 
-            {/* Matched Skills */}
-            {currentJob.matchedSkills.length > 0 && (
-              <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl p-8 border border-green-500/20 backdrop-blur-sm">
-                <h3 className="text-xl font-bold mb-5 flex items-center text-green-400">
-                  <CheckCircle className="w-6 h-6 mr-2" />
-                  Matched Skills
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {currentJob.matchedSkills.map((skill, index) => (
-                    <span key={index} className="px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/30 transition">
-                      {skill}
-                    </span>
-                  ))}
+            {/* Skill Analysis Section - Shows loading state or content */}
+            {loadingDetails === currentJob.id ? (
+              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-8 border border-white/10 backdrop-blur-sm">
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                  <p className="text-gray-400">Analyzing skill match...</p>
                 </div>
               </div>
-            )}
-
-            {/* Missing Skills */}
-            {currentJob.missingSkills.length > 0 && (
-              <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-2xl p-8 border border-red-500/20 backdrop-blur-sm">
-                <h3 className="text-xl font-bold mb-5 flex items-center text-red-400">
-                  <XCircle className="w-6 h-6 mr-2" />
-                  Missing Skills
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {currentJob.missingSkills.map((skill, index) => (
-                    <span key={index} className="px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-lg text-sm font-medium hover:bg-red-500/30 transition">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Improvement Suggestions */}
-            {currentJob.suggestions.length > 0 && (
-              <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-2xl p-8 border border-blue-500/20 backdrop-blur-sm">
-                <h3 className="text-xl font-bold mb-6 flex items-center text-blue-400">
-                  <Lightbulb className="w-6 h-6 mr-2" />
-                  Improvement Suggestions
-                </h3>
-                <div className="space-y-4">
-                  {currentJob.suggestions.map((suggestion, index) => (
-                    <div key={index} className="flex items-start space-x-4 p-4 bg-white/5 rounded-lg hover:bg-white/10 transition">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-sm font-bold">{index + 1}</span>
-                      </div>
-                      <p className="text-gray-300 leading-relaxed flex-1">{suggestion}</p>
+            ) : (
+              <>
+                {/* Matched Skills */}
+                {currentJob.matchedSkills.length > 0 && (
+                  <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl p-8 border border-green-500/20 backdrop-blur-sm">
+                    <h3 className="text-xl font-bold mb-5 flex items-center text-green-400">
+                      <CheckCircle className="w-6 h-6 mr-2" />
+                      Matched Skills
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {currentJob.matchedSkills.map((skill, index) => (
+                        <span key={index} className="px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/30 transition">
+                          {skill}
+                        </span>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                )}
+
+                {/* Missing Skills */}
+                {currentJob.missingSkills.length > 0 && (
+                  <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-2xl p-8 border border-red-500/20 backdrop-blur-sm">
+                    <h3 className="text-xl font-bold mb-5 flex items-center text-red-400">
+                      <XCircle className="w-6 h-6 mr-2" />
+                      Missing Skills
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {currentJob.missingSkills.map((skill, index) => (
+                        <span key={index} className="px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-lg text-sm font-medium hover:bg-red-500/30 transition">
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Improvement Suggestions */}
+                {currentJob.suggestions.length > 0 && (
+                  <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-2xl p-8 border border-blue-500/20 backdrop-blur-sm">
+                    <h3 className="text-xl font-bold mb-6 flex items-center text-blue-400">
+                      <Lightbulb className="w-6 h-6 mr-2" />
+                      Improvement Suggestions
+                    </h3>
+                    <div className="space-y-4">
+                      {currentJob.suggestions.map((suggestion, index) => (
+                        <div key={index} className="flex items-start space-x-4 p-4 bg-white/5 rounded-lg hover:bg-white/10 transition">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-sm font-bold">{index + 1}</span>
+                          </div>
+                          <p className="text-gray-300 leading-relaxed flex-1">{suggestion}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Show message if no details loaded yet and not loading */}
+                {!jobDetails[currentJob.id] && currentJob.matchedSkills.length === 0 && currentJob.missingSkills.length === 0 && (
+                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-8 border border-white/10 backdrop-blur-sm text-center">
+                    <Target className="w-10 h-10 text-blue-400 mx-auto mb-3" />
+                    <p className="text-gray-400">Skill analysis will appear here when loaded.</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
