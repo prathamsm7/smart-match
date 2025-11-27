@@ -185,6 +185,7 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
           employerName: job.company,
           jobDescription: job.description,
           jobRequirements: job.requirements || null,
+          matchScore: job.matchScore || null,  // Pass pre-computed score
         }),
       });
 

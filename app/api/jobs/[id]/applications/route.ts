@@ -61,7 +61,7 @@ export async function GET(
       );
     }
 
-    // 6. Fetch applications for this job
+    // 6. Fetch applications for this job (matchScore is pre-computed and stored!)
     const applications = await prisma.jobApplication.findMany({
       where: { jobId: id },
       orderBy: { createdAt: 'desc' },
@@ -77,94 +77,20 @@ export async function GET(
           select: {
             id: true,
             json: true,
-            vectorId: true,
           },
         },
       },
     });
 
-    // Helper function to calculate match score
-    function calculateMatchScore(candidateSkills: string[], jobRequirements: any, jobDescription: string | null): number {
-      if (!candidateSkills || candidateSkills.length === 0) return 0;
-
-      // Normalize skills to lowercase for comparison
-      const normalizedCandidateSkills = candidateSkills.map(s => s.toLowerCase().trim());
-
-      // Extract keywords from job requirements and description
-      let jobKeywords: string[] = [];
-      
-      // From requirements (can be array or object)
-      if (jobRequirements) {
-        if (Array.isArray(jobRequirements)) {
-          jobKeywords = jobRequirements.flatMap(req => 
-            typeof req === 'string' ? req.toLowerCase().split(/[\s,]+/) : []
-          );
-        } else if (typeof jobRequirements === 'object') {
-          jobKeywords = Object.values(jobRequirements).flatMap(val => 
-            typeof val === 'string' ? val.toLowerCase().split(/[\s,]+/) : []
-          );
-        }
-      }
-
-      // From description
-      if (jobDescription) {
-        const descWords = jobDescription.toLowerCase().split(/[\s,.\-;:()]+/);
-        jobKeywords = [...jobKeywords, ...descWords];
-      }
-
-      // Common tech keywords to look for
-      const techKeywords = [
-        'react', 'node', 'javascript', 'typescript', 'python', 'java', 'aws', 'docker',
-        'kubernetes', 'mongodb', 'postgresql', 'mysql', 'redis', 'graphql', 'rest',
-        'html', 'css', 'tailwind', 'next', 'vue', 'angular', 'express', 'django',
-        'flask', 'spring', 'git', 'agile', 'scrum', 'ci/cd', 'devops', 'linux',
-        'sql', 'nosql', 'api', 'microservices', 'cloud', 'azure', 'gcp'
-      ];
-
-      // Filter job keywords to tech-related ones
-      const relevantJobKeywords = [...new Set(jobKeywords.filter(kw => 
-        techKeywords.some(tk => kw.includes(tk) || tk.includes(kw))
-      ))];
-
-      if (relevantJobKeywords.length === 0) {
-        // If no tech keywords found in job, base score on having skills at all
-        return Math.min(50 + (candidateSkills.length * 5), 85);
-      }
-
-      // Calculate match
-      let matchedCount = 0;
-      for (const skill of normalizedCandidateSkills) {
-        if (relevantJobKeywords.some(kw => skill.includes(kw) || kw.includes(skill))) {
-          matchedCount++;
-        }
-      }
-
-      // Base score calculation
-      const matchRatio = matchedCount / Math.max(relevantJobKeywords.length, 1);
-      const skillBonus = Math.min(candidateSkills.length * 2, 20); // Bonus for having more skills
-      
-      // Score between 40-98
-      const score = Math.round(40 + (matchRatio * 40) + skillBonus);
-      return Math.min(score, 98);
-    }
-
-    // 7. Format applications with snapshot data and match scores
+    // 7. Format applications - matchScore comes directly from DB (instant!)
     const formattedApplications = applications.map((app: typeof applications[0]) => {
       const snapshot = app.snapshot as any || {};
       const resumeJson = app.resume?.json as any || {};
-      const candidateSkills = snapshot.applicantSkills || resumeJson.skills || [];
-      
-      // Calculate match score based on skills vs job requirements
-      const matchScore = calculateMatchScore(
-        candidateSkills,
-        job.requirements,
-        job.description
-      );
 
       return {
         id: app.id,
         appliedDate: app.createdAt,
-        matchScore,
+        matchScore: app.matchScore ?? 50,  // Read from DB, fallback to 50 for old records
         user: {
           id: app.user.id,
           name: snapshot.applicantName || app.user.name || 'Unknown',
@@ -211,4 +137,3 @@ export async function GET(
     );
   }
 }
-

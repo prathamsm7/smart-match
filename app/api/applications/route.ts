@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 3. Get request body
-        const { jobId, resumeId, jobTitle, employerName, jobDescription, jobRequirements } = await request.json();
+        // 3. Get request body (matchScore is pre-computed from job search)
+        const { jobId, resumeId, jobTitle, employerName, jobDescription, jobRequirements, matchScore } = await request.json();
 
         if (!jobId || !resumeId) {
             return NextResponse.json(
@@ -117,12 +117,13 @@ export async function POST(request: NextRequest) {
             console.log(`✅ Created job ${jobId} in PostgreSQL (lazy creation)`);
         }
 
-        // 8. Create JobApplication
+        // 8. Create JobApplication with pre-computed match score
         const application = await prisma.jobApplication.create({
             data: {
                 userId: dbUser.id,           // Database user ID
                 resumeId: resumeDbData.id,   // Database resume ID (validated above)
                 jobId: jobId,                // Job ID (already a string)
+                matchScore: matchScore ? Math.round(matchScore) : null,  // Pre-computed from job search
                 snapshot: {
                     "jobTitle": jobTitle,
                     "employerName": employerName,

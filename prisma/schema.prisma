@@ -54,12 +54,13 @@ model Job {
 }
 
 model JobApplication {
-  id        String   @id @default(uuid())
-  userId    String
-  resumeId  String
-  jobId     String
-  snapshot  Json // frozen resume copy
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  userId     String
+  resumeId   String
+  jobId      String
+  matchScore Int?     // Pre-computed match score (0-100) from job search
+  snapshot   Json     // frozen resume copy
+  createdAt  DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id])
   resume Resume @relation(fields: [resumeId], references: [id])
