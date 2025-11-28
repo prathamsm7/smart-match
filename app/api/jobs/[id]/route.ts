@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createServerSupabase } from '@/lib/superbase/server';
-import { storeJob, JobData, qdrantClient } from '@/lib/agents';
+import { storeJob, JobData } from '@/lib/agents';
+import { qdrantClient } from '@/lib/clients';
 
 // GET a single job
 export async function GET(

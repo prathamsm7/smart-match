@@ -4,27 +4,12 @@ import { google } from '@ai-sdk/google';
 import { PDFParse } from "pdf-parse";
 import { z } from 'zod';
 import crypto from "crypto";
-import { QdrantClient } from "@qdrant/js-client-rest";
-import resumeSchema from './schema.js';
-import { normalizeExperienceScore } from './helpers.js';
-import OpenAI from 'openai';
-import redisClient from './redisClient.js';
-import { prisma } from './prisma.js';
+import resumeSchema from './schema';
+import { normalizeExperienceScore } from './helpers';
+import redisClient from './redisClient';
+import { prisma } from './prisma';
+import { geminiClient, openaiClient, qdrantClient } from './clients';
 
-// Gemini client for LLM calls
-const geminiClient = new OpenAI({
-    apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
-});
-
-const openaiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-
-const qdrantClient = new QdrantClient({
-    url: process.env.QDRANT_URL,
-    apiKey: process.env.QDRANT_API_KEY
-});
 
 // Helper function to embed text using Google's embedding model
 async function embedText(text: string) {
@@ -111,7 +96,7 @@ const uploadResume = tool({
             console.log(`🆔 Generated Resume ID: ${resumeId}`);
 
             // Upstash Redis uses 'ex' (lowercase) for expiration in seconds
-            await redisClient.set(`resumeData:${resumeId}`, JSON.stringify({resumeData, vector}), { ex: 7 * 24 * 60 * 60 });
+            await redisClient.set(`resumeData:${resumeId}`, JSON.stringify({ resumeData, vector }), { ex: 7 * 24 * 60 * 60 });
 
             // Upload to Qdrant
             const response = await qdrantClient.upsert("resumes", {
@@ -295,7 +280,7 @@ async function calculateSkillAndExperienceMatch(resume: any, job: any) {
         });
 
         const raw = res.choices?.[0]?.message?.content?.trim() || '';
-        
+
         // Clean markdown code fences if present (```json ... ```)
         let cleaned = raw;
         if (cleaned.startsWith('```')) {
@@ -305,7 +290,7 @@ async function calculateSkillAndExperienceMatch(resume: any, job: any) {
             cleaned = cleaned.replace(/\n?```\s*$/i, '');
         }
         cleaned = cleaned.trim();
-        
+
         const result = JSON.parse(cleaned);
 
         return {
@@ -348,8 +333,8 @@ const searchJobs = tool({
             if (cachedResumeData) {
                 console.log("🚀 ~ cachedResumeData:")
                 // Upstash may return string or object, handle both
-                const parsed = typeof cachedResumeData === 'string' 
-                    ? JSON.parse(cachedResumeData) 
+                const parsed = typeof cachedResumeData === 'string'
+                    ? JSON.parse(cachedResumeData)
                     : cachedResumeData;
                 resumeVec = parsed.vector;
                 resumeInfo = parsed.resumeData;
@@ -362,14 +347,14 @@ const searchJobs = tool({
                     with_payload: true,
                     with_vector: true,
                 });
-                
+
                 if (!resumeResult || !resumeResult.length) {
                     throw new Error(`Resume not found with ID: ${resumeId}`);
                 }
                 resumeVec = resumeResult[0].vector;
                 resumeInfo = resumeResult[0].payload;
 
-                await redisClient.set(cacheKey, JSON.stringify({resumeData: resumeInfo, vector: resumeVec}), { ex: 60 * 60 });
+                await redisClient.set(cacheKey, JSON.stringify({ resumeData: resumeInfo, vector: resumeVec }), { ex: 60 * 60 });
 
             }
 
@@ -426,7 +411,7 @@ const searchJobs = tool({
             const results = matches.map((match: any) => {
                 const jobId = match.payload.id as string;
                 const job = jobMap.get(jobId);
-                
+
                 if (!job) {
                     console.warn(`⚠️  Job ${jobId} not found in PostgreSQL, skipping`);
                     return null;
@@ -504,7 +489,7 @@ const masterResumeAgent = new Agent({
     tools: [extractResumeData, uploadResume, searchJobs],
 });
 
- async function runMasterAgent({ source, resumeId, filePath, resumeText, skipJobSearch = false }: {
+async function runMasterAgent({ source, resumeId, filePath, resumeText, skipJobSearch = false }: {
     source: 'id' | 'file';
     resumeId?: string;
     filePath?: string;
@@ -567,7 +552,7 @@ export interface JobData {
 
 export async function storeJob(jobData: JobData): Promise<string> {
     try {
-        
+
         // 2. Create vector text for embedding
         const vectorText = [
             jobData.title,
@@ -580,7 +565,7 @@ export async function storeJob(jobData: JobData): Promise<string> {
                     ? JSON.stringify(jobData.responsibilities)
                     : String(jobData.responsibilities || ''),
             // Handle requirements (can be array or object)
-            Array.isArray(jobData.requirements) 
+            Array.isArray(jobData.requirements)
                 ? jobData.requirements.join(' ')
                 : typeof jobData.requirements === 'object' && jobData.requirements !== null
                     ? JSON.stringify(jobData.requirements)
@@ -627,6 +612,6 @@ export async function storeJob(jobData: JobData): Promise<string> {
     }
 }
 
-// Export qdrantClient and helper functions for use in API routes
-export { qdrantClient, runMasterAgent, calculateSkillAndExperienceMatch, explainMatchAndSkillGap, embedText };
+// Export helper functions for use in API routes
+export { runMasterAgent, calculateSkillAndExperienceMatch, explainMatchAndSkillGap, embedText };
 

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/superbase/server";
 import redisClient from "@/lib/redisClient";
-import { qdrantClient } from "@/lib/agents";
+import { qdrantClient } from "@/lib/clients";
 
 
 export async function POST(request: NextRequest) {

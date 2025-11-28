@@ -4,13 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { createBrowserSupabase } from "@/lib/superbase/client";
 import { useSupabaseAuthSync } from "@/hooks/useSupabaseAuth";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { DashboardSidebar, type DashboardView } from './components/DashboardSidebar';
-import { ResumesView } from './components/ResumesView';
-import { JobMatchesView } from './components/JobMatchesView';
-import { ApplicationsView } from './components/ApplicationsView';
-import { JobsDashboard } from './components/JobsDashboard';
-import { DashboardOverview } from './components/DashboardOverview';
-import TestComponent from './components/TestComponent';
+import { DashboardSidebar, type DashboardView } from '@/components/dashboard/DashboardSidebar';
+import { ResumesView } from '@/components/candidate/ResumesView';
+import { JobMatchesView } from '@/components/candidate/JobMatchesView';
+import { ApplicationsView } from '@/components/candidate/ApplicationsView';
+import { JobsDashboard } from '@/components/recruiter/JobsDashboard';
+import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
+import TestComponent from '@/components/ui/TestComponent';
 
 export default function DashboardPage() {
   const supabase = createBrowserSupabase();
@@ -162,12 +162,6 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <div className="lg:ml-72 min-h-screen">
-        {/* <DashboardHeader
-          user={user}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          currentView={currentView}
-        /> */}
 
         {/* Dashboard Content */}
         <main className="p-6 space-y-6">

@@ -69,11 +69,11 @@ export default function SmartResumeLanding() {
                 SmartMatch
               </span>
             </Link>
-            
+
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="hover:text-blue-400 transition">Features</a>
               <a href="#how" className="hover:text-blue-400 transition">How It Works</a>
-              <Link href="/upload" className="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full hover:shadow-lg hover:shadow-blue-500/50 transition transform hover:scale-105">
+              <Link href="/dashboard" className="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full hover:shadow-lg hover:shadow-blue-500/50 transition transform hover:scale-105">
                 Get Started
               </Link>
             </div>
@@ -89,7 +89,7 @@ export default function SmartResumeLanding() {
             <div className="px-4 py-4 space-y-3">
               <a href="#features" className="block hover:text-blue-400 transition">Features</a>
               <a href="#how" className="block hover:text-blue-400 transition">How It Works</a>
-              <Link href="/upload" className="block w-full px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full text-center">
+              <Link href="/dashboard" className="block w-full px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full text-center">
                 Get Started
               </Link>
             </div>
@@ -105,19 +105,19 @@ export default function SmartResumeLanding() {
               <Zap className="w-4 h-4 text-cyan-400" />
               <span className="text-sm">AI-Powered Career Matching</span>
             </div>
-            
+
             <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-blue-200 to-cyan-200 bg-clip-text text-transparent">
               Your Dream Job
               <br />
               Is One Match Away
             </h1>
-            
+
             <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
               Leverage AI to create the perfect resume and get matched with opportunities that align with your skills and aspirations
             </p>
-            
+
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link href="/upload" className="px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full font-semibold hover:shadow-2xl hover:shadow-blue-500/50 transition transform hover:scale-105 flex items-center space-x-2">
+              <Link href="/dashboard" className="px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full font-semibold hover:shadow-2xl hover:shadow-blue-500/50 transition transform hover:scale-105 flex items-center space-x-2">
                 <span>Start Matching Now</span>
                 <ArrowRight className="w-5 h-5" />
               </Link>
@@ -155,11 +155,10 @@ export default function SmartResumeLanding() {
             {features.map((feature, index) => (
               <div
                 key={index}
-                className={`p-8 rounded-2xl border transition-all duration-300 transform hover:scale-105 cursor-pointer ${
-                  activeFeature === index
+                className={`p-8 rounded-2xl border transition-all duration-300 transform hover:scale-105 cursor-pointer ${activeFeature === index
                     ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-blue-500/50 shadow-lg shadow-blue-500/20'
                     : 'bg-white/5 border-white/10 hover:bg-white/10'
-                }`}
+                  }`}
                 onMouseEnter={() => setActiveFeature(index)}
               >
                 <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-xl flex items-center justify-center mb-6">
@@ -218,7 +217,7 @@ export default function SmartResumeLanding() {
               <p className="text-gray-400 text-lg mb-8">
                 We combine cutting-edge AI technology with deep industry insights to help you stand out in today's competitive job market.
               </p>
-              
+
               <div className="space-y-4">
                 {benefits.map((benefit, index) => (
                   <div key={index} className="flex items-center space-x-3 group">
@@ -241,7 +240,7 @@ export default function SmartResumeLanding() {
                       <div className="text-sm text-gray-400">Growing community</div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-4 p-4 bg-white/10 rounded-xl">
                     <TrendingUp className="w-8 h-8 text-cyan-400" />
                     <div>
@@ -249,7 +248,7 @@ export default function SmartResumeLanding() {
                       <div className="text-sm text-gray-400">Get matched faster</div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-4 p-4 bg-white/10 rounded-xl">
                     <Sparkles className="w-8 h-8 text-cyan-300" />
                     <div>
@@ -274,7 +273,7 @@ export default function SmartResumeLanding() {
             <p className="text-xl text-gray-300 mb-8">
               Join thousands of professionals who found their dream jobs with SmartMatch
             </p>
-            <Link href="/upload" className="inline-flex items-center space-x-2 px-10 py-5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full font-semibold text-lg hover:shadow-2xl hover:shadow-blue-500/50 transition transform hover:scale-105">
+            <Link href="/dashboard" className="inline-flex items-center space-x-2 px-10 py-5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full font-semibold text-lg hover:shadow-2xl hover:shadow-blue-500/50 transition transform hover:scale-105">
               <span>Get Started for Free</span>
               <ArrowRight className="w-6 h-6" />
             </Link>

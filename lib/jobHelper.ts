@@ -1,11 +1,9 @@
-import { QdrantClient } from "@qdrant/js-client-rest";
-import redisClient from './redisClient.js';
+import { embed } from 'ai';
+import { google } from '@ai-sdk/google';
+import redisClient from './redisClient';
 import { prisma } from './prisma.js';
+import { qdrantClient } from './clients';
 
-const qdrantClient = new QdrantClient({
-    url: process.env.QDRANT_URL,
-    apiKey: process.env.QDRANT_API_KEY
-});
 
 /**
  * Search for jobs matching a resume - standalone function (bypasses agent framework)
@@ -26,8 +24,8 @@ export async function searchJobsForResume(resumeId: string) {
         let resumeVec, resumeInfo;
         if (cachedResumeData) {
             console.log("🚀 ~ cachedResumeData found");
-            const parsed = typeof cachedResumeData === 'string' 
-                ? JSON.parse(cachedResumeData) 
+            const parsed = typeof cachedResumeData === 'string'
+                ? JSON.parse(cachedResumeData)
                 : cachedResumeData;
             resumeVec = parsed.vector;
             resumeInfo = parsed.resumeData;
@@ -38,14 +36,14 @@ export async function searchJobsForResume(resumeId: string) {
                 with_payload: true,
                 with_vector: true,
             });
-            
+
             if (!resumeResult || !resumeResult.length) {
                 throw new Error(`Resume not found with ID: ${resumeId}`);
             }
             resumeVec = resumeResult[0].vector;
             resumeInfo = resumeResult[0].payload;
 
-            await redisClient.set(cacheKey, JSON.stringify({resumeData: resumeInfo, vector: resumeVec}), { ex: 60 * 60 });
+            await redisClient.set(cacheKey, JSON.stringify({ resumeData: resumeInfo, vector: resumeVec }), { ex: 60 * 60 });
         }
 
         if (!resumeVec || !resumeInfo) {
@@ -95,7 +93,7 @@ export async function searchJobsForResume(resumeId: string) {
         const results = matches.map((match: any) => {
             const jobId = match.payload.id as string;
             const job = jobMap.get(jobId);
-            
+
             if (!job) {
                 console.warn(`⚠️  Job ${jobId} not found in PostgreSQL, skipping`);
                 return null;

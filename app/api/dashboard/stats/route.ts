@@ -27,132 +27,12 @@ export async function GET(request: NextRequest) {
 
     // Candidate stats
     if (dbUser.role === 'candidate') {
-      // Get application counts
-      const totalApplications = await prisma.jobApplication.count({
-        where: { userId: dbUser.id },
-      });
-
-      // Get resume count
-      const resumeCount = await prisma.resume.count({
-        where: { userId: dbUser.id },
-      });
-
-      // Get primary resume
-      const primaryResume = await prisma.resume.findFirst({
-        where: { userId: dbUser.id, isPrimary: true },
-      });
-
-      // Calculate profile strength based on resume completeness
-      let profileStrength = 0;
-      if (primaryResume?.json) {
-        const resumeData = primaryResume.json as any;
-        const fields = ['name', 'email', 'phone', 'summary', 'skills', 'experience', 'education', 'languages'];
-        const filledFields = fields.filter(f => {
-          const value = resumeData[f];
-          return value && (Array.isArray(value) ? value.length > 0 : true);
-        });
-        profileStrength = Math.round((filledFields.length / fields.length) * 100);
-      }
-
-      // Get recent applications for activity
-      const recentApplications = await prisma.jobApplication.findMany({
-        where: { userId: dbUser.id },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        include: {
-          job: {
-            select: {
-              title: true,
-              employerName: true,
-            },
-          },
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        role: 'candidate',
-        stats: {
-          totalApplications,
-          resumeCount,
-          profileStrength,
-          // These would need interview scheduling feature to be real
-          interviewsScheduled: 0,
-        },
-        recentApplications: recentApplications.map((app: typeof recentApplications[0]) => ({
-          id: app.id,
-          jobTitle: app.job.title,
-          company: app.job.employerName || 'Unknown Company',
-          appliedAt: app.createdAt,
-        })),
-      });
+      return await getCandidateStats(dbUser);
     }
 
     // Recruiter stats
     if (dbUser.role === 'recruiter') {
-      const totalJobs = await prisma.job.count({
-        where: { postedBy: dbUser.id },
-      });
-
-      const jobsWithApplications = await prisma.job.count({
-        where: {
-          postedBy: dbUser.id,
-          applications: {
-            some: {},
-          },
-        },
-      });
-
-      const totalApplications = await prisma.jobApplication.count({
-        where: {
-          job: {
-            postedBy: dbUser.id,
-          },
-        },
-      });
-
-      // Get recent applications to recruiter's jobs
-      const recentApplications = await prisma.jobApplication.findMany({
-        where: {
-          job: {
-            postedBy: dbUser.id,
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        include: {
-          job: {
-            select: {
-              title: true,
-              employerName: true,
-            },
-          },
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        role: 'recruiter',
-        stats: {
-          totalJobs,
-          totalApplications,
-          jobsWithApplications,
-          activeJobs: totalJobs, // All jobs are active for now
-        },
-        recentApplications: recentApplications.map((app: typeof recentApplications[0]) => ({
-          id: app.id,
-          jobTitle: app.job.title,
-          company: app.job.employerName,
-          candidateName: (app as any).snapshot?.applicantName || app.user.name || app.user.email,
-          appliedAt: app.createdAt,
-        })),
-      });
+      return await getRecruiterStats(dbUser);
     }
 
     return NextResponse.json({
@@ -169,3 +49,130 @@ export async function GET(request: NextRequest) {
   }
 }
 
+async function getCandidateStats(dbUser: any) {
+  // Get application counts
+  const totalApplications = await prisma.jobApplication.count({
+    where: { userId: dbUser.id },
+  });
+
+  // Get resume count
+  const resumeCount = await prisma.resume.count({
+    where: { userId: dbUser.id },
+  });
+
+  // Get primary resume
+  const primaryResume = await prisma.resume.findFirst({
+    where: { userId: dbUser.id, isPrimary: true },
+  });
+
+  // Calculate profile strength based on resume completeness
+  let profileStrength = 0;
+  if (primaryResume?.json) {
+    const resumeData = primaryResume.json as any;
+    const fields = ['name', 'email', 'phone', 'summary', 'skills', 'experience', 'education', 'languages'];
+    const filledFields = fields.filter(f => {
+      const value = resumeData[f];
+      return value && (Array.isArray(value) ? value.length > 0 : true);
+    });
+    profileStrength = Math.round((filledFields.length / fields.length) * 100);
+  }
+
+  // Get recent applications for activity
+  const recentApplications = await prisma.jobApplication.findMany({
+    where: { userId: dbUser.id },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    include: {
+      job: {
+        select: {
+          title: true,
+          employerName: true,
+        },
+      },
+    },
+  });
+
+  return NextResponse.json({
+    success: true,
+    role: 'candidate',
+    stats: {
+      totalApplications,
+      resumeCount,
+      profileStrength,
+      // These would need interview scheduling feature to be real
+      interviewsScheduled: 0,
+    },
+    recentApplications: recentApplications.map((app: typeof recentApplications[0]) => ({
+      id: app.id,
+      jobTitle: app.job.title,
+      company: app.job.employerName || 'Unknown Company',
+      appliedAt: app.createdAt,
+    })),
+  });
+}
+
+async function getRecruiterStats(dbUser: any) {
+  const totalJobs = await prisma.job.count({
+    where: { postedBy: dbUser.id },
+  });
+
+  const jobsWithApplications = await prisma.job.count({
+    where: {
+      postedBy: dbUser.id,
+      applications: {
+        some: {},
+      },
+    },
+  });
+
+  const totalApplications = await prisma.jobApplication.count({
+    where: {
+      job: {
+        postedBy: dbUser.id,
+      },
+    },
+  });
+
+  // Get recent applications to recruiter's jobs
+  const recentApplications = await prisma.jobApplication.findMany({
+    where: {
+      job: {
+        postedBy: dbUser.id,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    include: {
+      job: {
+        select: {
+          title: true,
+          employerName: true,
+        },
+      },
+      user: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return NextResponse.json({
+    success: true,
+    role: 'recruiter',
+    stats: {
+      totalJobs,
+      totalApplications,
+      jobsWithApplications,
+      activeJobs: totalJobs, // All jobs are active for now
+    },
+    recentApplications: recentApplications.map((app: typeof recentApplications[0]) => ({
+      id: app.id,
+      jobTitle: app.job.title,
+      company: app.job.employerName,
+      candidateName: (app as any).snapshot?.applicantName || app.user.name || app.user.email,
+      appliedAt: app.createdAt,
+    })),
+  });
+}
