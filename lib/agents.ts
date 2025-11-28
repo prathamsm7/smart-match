@@ -150,7 +150,8 @@ export async function extractTextFromPDFBuffer(buffer: Buffer) {
 
 // Helper functions for job matching
 async function explainMatchAndSkillGap(resume: any, job: any) {
-    const prompt = `You are an AI Career Assistant. Compare the candidate's resume with the job requirements.
+    const prompt = `You are an AI Career Coach helping a job seeker understand how well they match a job.
+                    You are speaking DIRECTLY TO THE CANDIDATE (use "you" and "your", NOT "the candidate").
                     Extract ONLY factual insights — no assumptions.
 
                     Return response in EXACT JSON format without any markdown or commentary:
@@ -166,32 +167,32 @@ async function explainMatchAndSkillGap(resume: any, job: any) {
                     Strict formatting rules:
                     - JSON only (no markdown, no commentary)
                     - "overallMatchScore" must be an integer from 0 to 100
-                    - "matchedSkills": Array of skills that appear in BOTH the job description/requirements AND the candidate's resume
-                    - "missingSkills": Array of skills that are EXPLICITLY mentioned in the job description or job requirements but are NOT in the candidate's resume. MUST be empty [] if no such skills exist. DO NOT include any skills not mentioned in the job description or requirements.
-                    - "improvementSuggestions" means the skills that the candidate should learn to improve the match. It should be a list of overall skills (coding, problem solving, team work, communication, etc.) that the candidate should learn.
+                    - "matchedSkills": Array of skills that appear in BOTH the job description/requirements AND your resume
+                    - "missingSkills": Array of skills that are EXPLICITLY mentioned in the job description or job requirements but are NOT in your resume. MUST be empty [] if no such skills exist. DO NOT include any skills not mentioned in the job description or requirements.
+                    - "improvementSuggestions": Actionable suggestions for you to improve your match. Should be encouraging and specific (e.g., "Consider learning TypeScript to strengthen your frontend skills").
                     - Focus on technical match, role fit, and relevant experience
 
-                    Candidate Resume:
+                    Your Resume:
                     Skills: ${resume.skills?.join(", ") || ""}
                     Experience: ${resume.experience?.map((e: any) => e.description).join(", ") || ""}
                     Summary: ${resume.summary || ""}
 
-                    Job Description:${job.jobDescription || ""}
+                    Job Description: ${job.jobDescription || ""}
                     Job Requirements: ${job?.jobRequirements?.map((r: any) => typeof r === 'string' ? r : r.requirement).join(", ") || ""}
 
                     Task:
-                    - Compare job required skills ★ vs resume skills
-                    - Compare the candidate profile summary with the job description and job requirements
-                    - Highlight strongest alignments (tech + domain + role level)
-                    - Identify missing skills: ONLY include skills that are EXPLICITLY mentioned in the job description or job requirements but are NOT present in the candidate's resume skills list
+                    - Compare job required skills vs your skills
+                    - Compare your profile summary with the job description and requirements
+                    - Highlight your strongest alignments (tech + domain + role level)
+                    - Identify missing skills: ONLY include skills EXPLICITLY mentioned in job description/requirements that are NOT in your resume
                     - CRITICAL RULES for missingSkills:
                       * ONLY include skills that appear in the job description or job requirements
-                      * ONLY include skills that are NOT in the candidate's resume skills
-                      * DO NOT add any skills that are not mentioned in the job description or job requirements
-                      * If no skills from the job description/requirements are missing from the resume, return an empty array []
-                      * Be strict: if a skill is not explicitly mentioned in the job description or requirements, it should NOT be in missingSkills
-                    - Write short and specific suggestions to improve match
-                    - matchReason: must be a brief description of the match using the skills and experience
+                      * ONLY include skills that are NOT in your resume skills
+                      * DO NOT add any skills not mentioned in the job description or requirements
+                      * If no skills from job description/requirements are missing from your resume, return an empty array []
+                      * Be strict: if a skill is not explicitly mentioned in the job, it should NOT be in missingSkills
+                    - Write encouraging, actionable suggestions to help you improve your match
+                    - matchReason: Write in SECOND PERSON ("You have strong experience in...", "Your skills in X align well with..."). Be encouraging and highlight positives first. Keep it brief (2-3 sentences max).
     `;
 
     try {

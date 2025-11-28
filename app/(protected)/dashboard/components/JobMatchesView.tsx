@@ -6,7 +6,8 @@ import {
   Lightbulb, ArrowRight, Search, Star, Building2, Sparkles, Target,
   SlidersHorizontal, AlertCircle, RefreshCw, TrendingUp
 } from 'lucide-react';
-import ReactMarkdown from "react-markdown"
+import ReactMarkdown from "react-markdown";
+import { JobMatchesShimmer } from "./JobMatchesShimmer";
 
 interface JobMatch {
   id: string;
@@ -59,7 +60,12 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
       setError(null);
 
       // Fetch job matches - backend finds primary resume automatically
-      const matchesResponse = await fetch('/api/jobs/matches');
+      const matchesResponse = await fetch('/api/jobs/matches',{
+        cache: "force-cache",
+        next: {
+          revalidate: 300,
+        },
+      });
       const matchesData = await matchesResponse.json();
 
       if (!matchesResponse.ok) {
@@ -243,14 +249,7 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
 
   // Loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-400">Loading job matches...</p>
-        </div>
-      </div>
-    );
+    return <JobMatchesShimmer jobCount={5} />;
   }
 
   // Error state
@@ -420,10 +419,31 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
                 <div className="text-center">
                   <div className="relative w-32 h-32">
                     {loadingDetails === currentJob.id ? (
-                      // Loading state
-                      <div className="w-32 h-32 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-500"></div>
-                      </div>
+                      // Loading state - same UI with animation
+                      <>
+                        <svg className="transform -rotate-90 w-32 h-32 animate-pulse">
+                          <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-slate-700" />
+                          <circle
+                            cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="10" fill="transparent"
+                            strokeDasharray={`${2 * Math.PI * 56}`}
+                            strokeDashoffset={`${2 * Math.PI * 56 * 0.5}`}
+                            className="text-orange-400/50 animate-spin"
+                            style={{ 
+                              transformOrigin: 'center',
+                              animation: 'spin 2s linear infinite'
+                            }}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-orange-400/70 animate-pulse">
+                              --
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">Analyzing</div>
+                          </div>
+                        </div>
+                      </>
                     ) : jobDetails[currentJob.id] ? (
                       // Score loaded - show progress ring
                       <>
@@ -545,75 +565,123 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
 
             {/* Skill Analysis Section - Shows loading state or content */}
             {loadingDetails === currentJob.id ? (
-              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-8 border border-white/10 backdrop-blur-sm">
-                <div className="flex items-center justify-center space-x-3">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                  <p className="text-gray-400">Analyzing skill match...</p>
+              <div className="space-y-6 animate-pulse">
+                {/* Shimmer for Why You're a Great Fit */}
+                <div className="bg-gradient-to-br from-cyan-500/5 to-blue-500/5 rounded-2xl p-8 border border-cyan-500/10">
+                  <div className="h-7 w-48 bg-slate-700/50 rounded-lg mb-4"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-full bg-slate-700/50 rounded"></div>
+                    <div className="h-4 w-4/5 bg-slate-700/50 rounded"></div>
+                  </div>
+                </div>
+
+                {/* Shimmer for Matched Skills */}
+                <div className="bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-2xl p-8 border border-green-500/10">
+                  <div className="h-7 w-40 bg-slate-700/50 rounded-lg mb-5"></div>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="h-9 bg-slate-700/50 rounded-lg" style={{ width: `${60 + i * 15}px` }}></div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Shimmer for Skills to Develop */}
+                <div className="bg-gradient-to-br from-red-500/5 to-orange-500/5 rounded-2xl p-8 border border-red-500/10">
+                  <div className="h-7 w-44 bg-slate-700/50 rounded-lg mb-5"></div>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-9 bg-slate-700/50 rounded-lg" style={{ width: `${70 + i * 10}px` }}></div>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
               <>
-                {/* Matched Skills */}
-                {currentJob.matchedSkills.length > 0 && (
-                  <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl p-8 border border-green-500/20 backdrop-blur-sm">
-                    <h3 className="text-xl font-bold mb-5 flex items-center text-green-400">
-                      <CheckCircle className="w-6 h-6 mr-2" />
-                      Matched Skills
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {currentJob.matchedSkills.map((skill, index) => (
-                        <span key={index} className="px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/30 transition">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Get the loaded details */}
+                {(() => {
+                  const details = jobDetails[currentJob.id];
+                  const matchedSkills = details?.matchedSkills || [];
+                  const missingSkills = details?.missingSkills || [];
+                  const suggestions = details?.improvementSuggestions || [];
+                  const matchReason = details?.matchReason || '';
 
-                {/* Missing Skills */}
-                {currentJob.missingSkills.length > 0 && (
-                  <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-2xl p-8 border border-red-500/20 backdrop-blur-sm">
-                    <h3 className="text-xl font-bold mb-5 flex items-center text-red-400">
-                      <XCircle className="w-6 h-6 mr-2" />
-                      Missing Skills
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {currentJob.missingSkills.map((skill, index) => (
-                        <span key={index} className="px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-lg text-sm font-medium hover:bg-red-500/30 transition">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Improvement Suggestions */}
-                {currentJob.suggestions.length > 0 && (
-                  <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-2xl p-8 border border-blue-500/20 backdrop-blur-sm">
-                    <h3 className="text-xl font-bold mb-6 flex items-center text-blue-400">
-                      <Lightbulb className="w-6 h-6 mr-2" />
-                      Improvement Suggestions
-                    </h3>
-                    <div className="space-y-4">
-                      {currentJob.suggestions.map((suggestion, index) => (
-                        <div key={index} className="flex items-start space-x-4 p-4 bg-white/5 rounded-lg hover:bg-white/10 transition">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <span className="text-sm font-bold">{index + 1}</span>
-                          </div>
-                          <p className="text-gray-300 leading-relaxed flex-1">{suggestion}</p>
+                  return (
+                    <>
+                      {/* Match Reason */}
+                      {matchReason && (
+                        <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-2xl p-8 border border-cyan-500/20 backdrop-blur-sm">
+                          <h3 className="text-xl font-bold mb-4 flex items-center text-cyan-400">
+                            <Sparkles className="w-6 h-6 mr-2" />
+                            Why You're a Great Fit
+                          </h3>
+                          <p className="text-gray-200 leading-relaxed text-lg">{matchReason}</p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                      )}
 
-                {/* Show message if no details loaded yet and not loading */}
-                {!jobDetails[currentJob.id] && currentJob.matchedSkills.length === 0 && currentJob.missingSkills.length === 0 && (
-                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-8 border border-white/10 backdrop-blur-sm text-center">
-                    <Target className="w-10 h-10 text-blue-400 mx-auto mb-3" />
-                    <p className="text-gray-400">Skill analysis will appear here when loaded.</p>
-                  </div>
-                )}
+                      {/* Matched Skills */}
+                      {matchedSkills.length > 0 && (
+                        <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl p-8 border border-green-500/20 backdrop-blur-sm">
+                          <h3 className="text-xl font-bold mb-5 flex items-center text-green-400">
+                            <CheckCircle className="w-6 h-6 mr-2" />
+                            Matched Skills ({matchedSkills.length})
+                          </h3>
+                          <div className="flex flex-wrap gap-2">
+                            {matchedSkills.map((skill: string, index: number) => (
+                              <span key={index} className="px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/30 transition">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Missing Skills */}
+                      {missingSkills.length > 0 && (
+                        <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-2xl p-8 border border-red-500/20 backdrop-blur-sm">
+                          <h3 className="text-xl font-bold mb-5 flex items-center text-red-400">
+                            <XCircle className="w-6 h-6 mr-2" />
+                            Skills to Develop ({missingSkills.length})
+                          </h3>
+                          <div className="flex flex-wrap gap-2">
+                            {missingSkills.map((skill: string, index: number) => (
+                              <span key={index} className="px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-lg text-sm font-medium hover:bg-red-500/30 transition">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Improvement Suggestions */}
+                      {suggestions.length > 0 && (
+                        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-2xl p-8 border border-blue-500/20 backdrop-blur-sm">
+                          <h3 className="text-xl font-bold mb-6 flex items-center text-blue-400">
+                            <Lightbulb className="w-6 h-6 mr-2" />
+                            Improvement Suggestions
+                          </h3>
+                          <div className="space-y-4">
+                            {suggestions.map((suggestion: string, index: number) => (
+                              <div key={index} className="flex items-start space-x-4 p-4 bg-white/5 rounded-lg hover:bg-white/10 transition">
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-sm font-bold">{index + 1}</span>
+                                </div>
+                                <p className="text-gray-300 leading-relaxed flex-1">{suggestion}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show message if no details loaded yet */}
+                      {!details && (
+                        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-8 border border-white/10 backdrop-blur-sm text-center">
+                          <Target className="w-10 h-10 text-blue-400 mx-auto mb-3" />
+                          <p className="text-gray-400">Skill analysis will appear here when loaded.</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </div>

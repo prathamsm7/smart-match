@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { JobPostingForm } from "./JobPostingForm";
+import { JobListShimmer } from "./JobListShimmer";
 
 interface Job {
   id: string;
@@ -233,11 +234,7 @@ export function JobsDashboard({ userId }: { userId: string }) {
   const currentApplication = selectedCandidateIndex !== null ? jobApplications[selectedCandidateIndex] : null;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <JobListShimmer count={3} />;
   }
 
   if (error) {
