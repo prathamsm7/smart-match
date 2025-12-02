@@ -14,6 +14,7 @@ export async function POST(
 
         // Get vectorScore from request body (passed from frontend)
         const body = await request.json();
+        console.log("🚀 ~ body: fetchResumeMatches ~ body: ", body)
         const vectorScore = (body.vectorScore || 0) / 100; // Convert from 0-100 to 0-1
 
         if (!resumeId || !jobId) {

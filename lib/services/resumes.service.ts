@@ -88,6 +88,7 @@ export const resumesService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ vectorScore }),
         });
+        console.log("🚀 ~ response: fetchResumeMatches", response)
 
         const data = await response.json();
 
