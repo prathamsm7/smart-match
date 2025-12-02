@@ -30,13 +30,29 @@ export const resumesService = {
             body: formData,
         });
 
-        const data = await response.json();
-
+        // Check if response has content before parsing
         if (!response.ok) {
-            throw new Error(data.error || 'Failed to upload resume');
+            let errorMessage = 'Failed to upload resume';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+                // If JSON parsing fails, check if it's a timeout
+                if (response.status === 504 || response.status === 408) {
+                    errorMessage = 'Resume processing timed out. Please try again or contact support.';
+                } else {
+                    errorMessage = `Server error (${response.status}): ${response.statusText}`;
+                }
+            }
+            throw new Error(errorMessage);
         }
 
-        return data;
+        try {
+            const data = await response.json();
+            return data;
+        } catch (e) {
+            throw new Error('Invalid response from server. Please try again.');
+        }
     },
 
     async setPrimaryResume(resumeId: string) {
@@ -89,12 +105,28 @@ export const resumesService = {
             body: JSON.stringify({ vectorScore }),
         });
 
-        const data = await response.json();
-
+        // Check if response has content before parsing
         if (!response.ok) {
-            throw new Error(data.error || 'Failed to fetch job details');
+            let errorMessage = 'Failed to fetch job details';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+                // If JSON parsing fails, check if it's a timeout
+                if (response.status === 504 || response.status === 408) {
+                    errorMessage = 'Match calculation timed out. Please try again or contact support.';
+                } else {
+                    errorMessage = `Server error (${response.status}): ${response.statusText}`;
+                }
+            }
+            throw new Error(errorMessage);
         }
 
-        return data;
+        try {
+            const data = await response.json();
+            return data;
+        } catch (e) {
+            throw new Error('Invalid response from server. Please try again.');
+        }
     },
 };

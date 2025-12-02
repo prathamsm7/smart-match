@@ -5,6 +5,10 @@ import { qdrantClient } from '@/lib/clients';
 import { prisma } from '@/lib/prisma';
 import { createServerSupabase } from '@/lib/superbase/server';
 
+// Vercel serverless function timeout (60s on Pro, 10s on Hobby)
+// Set to 60 for resume processing with AI operations
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData();

@@ -1,0 +1,16 @@
+{
+    "functions": {
+        "app/api/resumes/upload/route.ts": {
+            "maxDuration": 60
+        },
+        "app/api/resumes/[id]/matches/[jobId]/route.ts": {
+            "maxDuration": 60
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/"
+        }
+    ]
+}

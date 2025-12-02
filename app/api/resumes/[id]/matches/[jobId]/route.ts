@@ -5,6 +5,9 @@ import { qdrantClient } from '@/lib/clients';
 import redisClient from '@/lib/redisClient';
 import { prisma } from '@/lib/prisma';
 
+// Vercel serverless function timeout - set to 60s for LLM operations
+export const maxDuration = 60;
+
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string; jobId: string }> }
