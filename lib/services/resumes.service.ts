@@ -30,29 +30,13 @@ export const resumesService = {
             body: formData,
         });
 
-        // Check if response has content before parsing
+        const data = await response.json();
+
         if (!response.ok) {
-            let errorMessage = 'Failed to upload resume';
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.error || errorMessage;
-            } catch (e) {
-                // If JSON parsing fails, check if it's a timeout
-                if (response.status === 504 || response.status === 408) {
-                    errorMessage = 'Resume processing timed out. Please try again or contact support.';
-                } else {
-                    errorMessage = `Server error (${response.status}): ${response.statusText}`;
-                }
-            }
-            throw new Error(errorMessage);
+            throw new Error(data.error || 'Failed to upload resume');
         }
 
-        try {
-            const data = await response.json();
-            return data;
-        } catch (e) {
-            throw new Error('Invalid response from server. Please try again.');
-        }
+        return data;
     },
 
     async setPrimaryResume(resumeId: string) {
@@ -105,28 +89,12 @@ export const resumesService = {
             body: JSON.stringify({ vectorScore }),
         });
 
-        // Check if response has content before parsing
+        const data = await response.json();
+
         if (!response.ok) {
-            let errorMessage = 'Failed to fetch job details';
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.error || errorMessage;
-            } catch (e) {
-                // If JSON parsing fails, check if it's a timeout
-                if (response.status === 504 || response.status === 408) {
-                    errorMessage = 'Match calculation timed out. Please try again or contact support.';
-                } else {
-                    errorMessage = `Server error (${response.status}): ${response.statusText}`;
-                }
-            }
-            throw new Error(errorMessage);
+            throw new Error(data.error || 'Failed to fetch job details');
         }
 
-        try {
-            const data = await response.json();
-            return data;
-        } catch (e) {
-            throw new Error('Invalid response from server. Please try again.');
-        }
+        return data;
     },
 };
