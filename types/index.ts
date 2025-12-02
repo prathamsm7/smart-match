@@ -41,6 +41,8 @@ export interface Application {
     };
     candidate: Candidate;
     matchScore?: number;
+    status: 'SUBMITTED' | 'VIEWED' | 'SHORTLISTED' | 'INTERVIEW' | 'REJECTED' | 'HIRED' | 'WITHDRAWN';
+    statusUpdatedAt?: string;
 }
 
 export interface JobWithApplications extends Job {

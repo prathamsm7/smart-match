@@ -51,4 +51,61 @@ export const applicationsService = {
 
         return data;
     },
+
+    async updateApplicationStatus(applicationId: string, status: string) {
+        const response = await fetch(`/api/applications/${applicationId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to update application status');
+        }
+
+        return data;
+    },
+
+    async markAsViewed(applicationId: string) {
+        // This is a convenience method that updates status to VIEWED
+        // Only works if current status is SUBMITTED
+        const response = await fetch(`/api/applications/${applicationId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status: 'VIEWED' }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            // Silently fail - don't show error if already viewed or other status
+            return null;
+        }
+
+        return data;
+    },
+
+    async withdrawApplication(applicationId: string) {
+        const response = await fetch(`/api/applications/${applicationId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action: 'WITHDRAWN' }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to withdraw application');
+        }
+
+        return data;
+    },
 };

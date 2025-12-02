@@ -60,9 +60,24 @@ model JobApplication {
   jobId      String
   matchScore Int?     // Pre-computed match score (0-100) from job search
   snapshot   Json     // frozen resume copy
+  status ApplicationStatus @default(SUBMITTED)
+  statusUpdatedAt DateTime? 
+  statusUpdatedBy String?       
+  notes          Json?           
+  withdrawnAt    DateTime? 
   createdAt  DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id])
   resume Resume @relation(fields: [resumeId], references: [id])
   job    Job    @relation(fields: [jobId], references: [id])
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  VIEWED
+  SHORTLISTED
+  INTERVIEW
+  REJECTED
+  HIRED
+  WITHDRAWN
 }

@@ -1,13 +1,33 @@
-import { Mail, Phone, MapPin, Award, CheckCircle, XCircle, Download, FileText, Code, Languages, Briefcase } from "lucide-react";
+"use client";
+import { Mail, Phone, MapPin, Award, Download, FileText, Code, Languages, Briefcase } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Candidate, Application } from "@/types";
+import { useEffect } from "react";
+import { applicationsService } from "@/lib/services/applications.service";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { StatusUpdateDropdown } from "./StatusUpdateDropdown";
 
 interface CandidateDetailProps {
     candidate: Candidate;
     application: Application;
+    onStatusUpdate?: (applicationId: string, newStatus: string) => Promise<void>;  // ADD THIS
 }
 
-export function CandidateDetail({ candidate, application }: CandidateDetailProps) {
+export function CandidateDetail({ candidate, application, onStatusUpdate }: CandidateDetailProps) {
+    useEffect(() => {
+        if (application.status === 'SUBMITTED') {
+            applicationsService.markAsViewed(application.id).catch((error) => {
+                console.error("🚀 ~ useEffect ~ error:markAsViewed", error)
+            });
+        }
+    }, [application.id, application.status])
+
+    async function handleStatusUpdate(applicationId: string, newStatus: string) {
+        if (onStatusUpdate) {
+            await onStatusUpdate(applicationId, newStatus);
+        }
+    }
+
     return (
         <div className="lg:col-span-2 space-y-6">
             {/* Candidate Header */}
@@ -54,20 +74,45 @@ export function CandidateDetail({ candidate, application }: CandidateDetailProps
                     </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-3">
-                    <button className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/30 transition flex items-center justify-center">
-                        <CheckCircle className="w-5 h-5 mr-2" />
-                        Accept
-                    </button>
-                    <button className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 rounded-lg font-semibold hover:shadow-lg hover:shadow-red-500/30 transition flex items-center justify-center">
-                        <XCircle className="w-5 h-5 mr-2" />
-                        Reject
-                    </button>
-                    <button className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition">
+                {/* Current Status Badge */}
+                <div className="mb-4">
+                    <StatusBadge status={application.status || 'SUBMITTED'} size="md" />
+                </div>
+
+                {/* Status Update Dropdown */}
+                <div className="flex items-center gap-3">
+                    <StatusUpdateDropdown
+                        currentStatus={application.status || 'SUBMITTED'}
+                        applicationId={application.id}
+                        onStatusUpdate={handleStatusUpdate}
+                    />
+                    <button 
+                        className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition flex items-center justify-center"
+                        title="Download Resume"
+                    >
                         <Download className="w-5 h-5" />
                     </button>
                 </div>
+
+                {/* Final Status Messages */}
+                {(application.status === 'HIRED' || application.status === 'REJECTED' || application.status === 'WITHDRAWN') && (
+                    <div className={`p-4 rounded-lg ${
+                        application.status === 'HIRED' 
+                            ? 'bg-emerald-500/10 border border-emerald-500/20' 
+                            : 'bg-gray-500/10 border border-gray-500/20'
+                    }`}>
+                        <p className={`text-sm font-medium ${
+                            application.status === 'HIRED' ? 'text-emerald-400' : 'text-gray-400'
+                        }`}>
+                            {application.status === 'HIRED' 
+                                ? '🎉 This candidate has been hired!' 
+                                : application.status === 'REJECTED'
+                                ? 'This application has been rejected.'
+                                : 'This application has been withdrawn.'}
+                        </p>
+                    </div>
+                )}
+                
             </div>
 
             {/* Summary */}
@@ -196,9 +241,16 @@ export function CandidateDetail({ candidate, application }: CandidateDetailProps
                 </div>
             )}
 
-            {/* Applied Date */}
-            <div className="text-center text-sm text-gray-400">
-                Applied {formatDistanceToNow(new Date(application.appliedDate), { addSuffix: true })}
+            {/* Applied Date & Status Update Info */}
+            <div className="text-center space-y-1">
+                <p className="text-sm text-gray-400">
+                    Applied {formatDistanceToNow(new Date(application.appliedDate), { addSuffix: true })}
+                </p>
+                {application.statusUpdatedAt && (
+                    <p className="text-xs text-gray-500">
+                        Status updated {formatDistanceToNow(new Date(application.statusUpdatedAt), { addSuffix: true })}
+                    </p>
+                )}
             </div>
         </div>
     );

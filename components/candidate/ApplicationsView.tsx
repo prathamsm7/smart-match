@@ -70,7 +70,10 @@ export function ApplicationsView({ userId }: { userId: string }) {
             {filteredApplications.length === 0 ? (
                 <ApplicationsEmptyState hasSearch={Boolean(searchTerm)} />
             ) : (
-                <ApplicationsList applications={filteredApplications} />
+                <ApplicationsList 
+                    applications={filteredApplications} 
+                    onApplicationUpdate={fetchApplications}
+                />
             )}
         </div>
     );

@@ -11,6 +11,7 @@ import { CandidateDetail } from "./jobs/CandidateDetail";
 import { useJobs } from "@/hooks/useJobs";
 import { useApplications } from "@/hooks/useApplications";
 import { Job } from "@/types";
+import { applicationsService } from "@/lib/services";
 
 export function JobsDashboard({ userId }: { userId: string }) {
   const { jobs, loading, error, fetchJobs, deleteJob } = useJobs(userId);
@@ -29,6 +30,17 @@ export function JobsDashboard({ userId }: { userId: string }) {
   // View states
   const [selectedJobIndex, setSelectedJobIndex] = useState<number | null>(null);
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number | null>(null);
+
+  async function handleStatusUpdate(applicationId: string, newStatus: string) {
+    try {
+      await applicationsService.updateApplicationStatus(applicationId, newStatus);
+      if (currentJob) {
+        await fetchJobApplications(currentJob.id);
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to update application status');
+    }
+  }
 
   async function handleDelete(jobId: string) {
     if (!confirm("Are you sure you want to delete this job posting? This action cannot be undone.")) {
@@ -238,7 +250,7 @@ export function JobsDashboard({ userId }: { userId: string }) {
 
         {/* Right Column - Candidate Details */}
         {selectedCandidateIndex !== null && currentCandidate && currentApplication && (
-          <CandidateDetail candidate={currentCandidate} application={currentApplication} />
+          <CandidateDetail candidate={currentCandidate} application={currentApplication} onStatusUpdate={handleStatusUpdate} />
         )}
       </div>
     </div>
