@@ -1,7 +1,8 @@
 import { embed } from 'ai';
 import { Agent, tool, run } from "@openai/agents";
 import { google } from '@ai-sdk/google';
-import { PDFParse } from "pdf-parse";
+import "pdf-parse/worker";
+import { PDFParse, VerbosityLevel } from "pdf-parse";
 import { z } from 'zod';
 import crypto from "crypto";
 import resumeSchema from './schema';
@@ -127,7 +128,7 @@ const uploadResume = tool({
 
 // Helper function to extract text from PDF buffer
 export async function extractTextFromPDFBuffer(buffer: Buffer) {
-    const parser = new PDFParse({ data: buffer });
+    const parser = new PDFParse({ data: buffer, verbosity: VerbosityLevel.WARNINGS });
     const result = await parser.getText();
     await parser.destroy();
     return result.text;
