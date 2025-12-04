@@ -21,6 +21,7 @@ model User {
   resumes      Resume[]
   applications JobApplication[]
   postedJobs   Job[]            @relation("JobPoster")
+  coverLetters CoverLetter[]
   createdAt    DateTime         @default(now())
 }
 
@@ -65,11 +66,41 @@ model JobApplication {
   statusUpdatedBy String?       
   notes          Json?           
   withdrawnAt    DateTime? 
+  coverLetterId  String?  @unique // Reference to submitted cover letter
   createdAt  DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id])
   resume Resume @relation(fields: [resumeId], references: [id])
   job    Job    @relation(fields: [jobId], references: [id])
+  coverLetter CoverLetter?
+}
+
+model CoverLetter {
+  id                String   @id @default(uuid())
+  applicationId    String?  @unique // Link to application (nullable for drafts)
+  userId            String   // User who owns this cover letter
+  jobId             String   // Job this cover letter is for (for rate limiting)
+  
+  // Content
+  generatedText     String   // AI-generated original text
+  finalText         String?  // User-edited final version (null if not edited)
+  isEdited          Boolean  @default(false)
+  
+  // Generation Metadata
+  promptVersion     String   @default("v1") // Which prompt variation was used (v1, v2, v3)
+  regenerationCount Int      @default(0) // How many times regenerated for this job
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id])
+  application       JobApplication? @relation(fields: [applicationId], references: [id])
+  
+  @@index([userId])
+  @@index([jobId])
+  @@index([applicationId])
 }
 
 enum ApplicationStatus {

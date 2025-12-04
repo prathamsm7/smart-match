@@ -23,6 +23,7 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applySuccess, setApplySuccess] = useState(false);
+  const [coverLetterId, setCoverLetterId] = useState<string | null>(null);
 
   // Lazy loading state for job details
   const [jobDetails, setJobDetails] = useState<Record<string, JobMatchAnalysis | undefined>>({});
@@ -137,7 +138,11 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
         jobDescription: job.description,
         jobRequirements: job.requirements || null,
         matchScore: job.matchScore || undefined,
+        coverLetterId: coverLetterId || undefined,
       });
+
+      // Reset cover letter after successful application
+      setCoverLetterId(null);
 
       // Success!
       setApplySuccess(true);
@@ -266,6 +271,8 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
           applySuccess={applySuccess}
           applyError={applyError}
           onApply={() => handleApplyNow(currentJob)}
+          primaryResumeId={primaryResumeId}
+          onCoverLetterGenerated={(id, text) => setCoverLetterId(id)}
         />
       </div>
     </div>

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { MatchScoreDial } from "./MatchScoreDial";
 import { SkillAnalysisSection } from "./SkillAnalysisSection";
+import { CoverLetterSection } from "./CoverLetterSection";
 import type { JobMatch, JobMatchAnalysis } from "./types";
 
 interface JobDetailsPanelProps {
@@ -25,6 +26,8 @@ interface JobDetailsPanelProps {
   applySuccess: boolean;
   applyError: string | null;
   onApply: () => void;
+  primaryResumeId?: string | null;
+  onCoverLetterGenerated?: (coverLetterId: string, finalText: string) => void;
 }
 
 export function JobDetailsPanel({
@@ -35,6 +38,8 @@ export function JobDetailsPanel({
   applySuccess,
   applyError,
   onApply,
+  primaryResumeId,
+  onCoverLetterGenerated,
 }: JobDetailsPanelProps) {
   if (!job) {
     return (
@@ -94,6 +99,19 @@ export function JobDetailsPanel({
               <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
               <p className="text-green-400 text-sm">Application submitted successfully!</p>
             </div>
+          )}
+
+          {/* Cover Letter Section */}
+          {primaryResumeId && (
+            <CoverLetterSection
+              jobId={job.id}
+              resumeId={primaryResumeId}
+              jobTitle={job.title}
+              company={job.company}
+              description={job.description}
+              requirements={job.requirements}
+              onCoverLetterGenerated={onCoverLetterGenerated || (() => {})}
+            />
           )}
 
           <div className="flex gap-3">

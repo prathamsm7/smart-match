@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
         }
 
         // 3. Get request body (matchScore is pre-computed from job search)
-        const { jobId, resumeId, jobTitle, employerName, jobDescription, jobRequirements, matchScore } = await request.json();
+        const { jobId, resumeId, jobTitle, employerName, jobDescription, jobRequirements, matchScore, coverLetterId } = await request.json();
 
         if (!jobId || !resumeId) {
             return NextResponse.json(
@@ -117,13 +117,28 @@ export async function POST(request: NextRequest) {
             console.log(`✅ Created job ${jobId} in PostgreSQL (lazy creation)`);
         }
 
-        // 8. Create JobApplication with pre-computed match score
+        // 8. Verify cover letter exists and belongs to user if provided
+        if (coverLetterId) {
+            const coverLetter = await prisma.coverLetter.findUnique({
+                where: { id: coverLetterId },
+            });
+
+            if (!coverLetter || coverLetter.userId !== dbUser.id) {
+                return NextResponse.json(
+                    { error: 'Cover letter not found or does not belong to user' },
+                    { status: 404 }
+                );
+            }
+        }
+
+        // 9. Create JobApplication with pre-computed match score
         const application = await prisma.jobApplication.create({
             data: {
                 userId: dbUser.id,           // Database user ID
                 resumeId: resumeDbData.id,   // Database resume ID (validated above)
                 jobId: jobId,                // Job ID (already a string)
                 matchScore: matchScore ? Math.round(matchScore) : null,  // Pre-computed from job search
+                coverLetterId: coverLetterId || null,  // Link cover letter if provided
                 snapshot: {
                     "jobTitle": jobTitle,
                     "employerName": employerName,
@@ -140,6 +155,14 @@ export async function POST(request: NextRequest) {
                 }
             }
         });
+
+        // 10. Update cover letter with application ID if cover letter was provided
+        if (coverLetterId) {
+            await prisma.coverLetter.update({
+                where: { id: coverLetterId },
+                data: { applicationId: application.id },
+            });
+        }
 
         return NextResponse.json({
             success: true,

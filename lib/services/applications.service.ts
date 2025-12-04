@@ -6,6 +6,7 @@ interface CreateApplicationData {
     jobDescription?: string;
     jobRequirements?: any;
     matchScore?: number;
+    coverLetterId?: string;
 }
 
 export const applicationsService = {
