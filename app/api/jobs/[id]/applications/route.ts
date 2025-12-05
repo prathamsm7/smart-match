@@ -79,6 +79,14 @@ export async function GET(
             json: true,
           },
         },
+        coverLetter: {
+          select: {
+            id: true,
+            generatedText: true,
+            finalText: true,
+            isEdited: true,
+          },
+        },
       },
     });
 
@@ -91,8 +99,13 @@ export async function GET(
         id: app.id,
         appliedDate: app.createdAt,
         matchScore: app.matchScore ?? 50,  // Read from DB, fallback to 50 for old records
-        status: app.status,  // ADD THIS LINE
-        statusUpdatedAt: app.statusUpdatedAt,  // ADD THIS LINE
+        status: app.status,
+        statusUpdatedAt: app.statusUpdatedAt,
+        coverLetter: app.coverLetter ? {
+          id: app.coverLetter.id,
+          text: app.coverLetter.finalText || app.coverLetter.generatedText,
+          isEdited: app.coverLetter.isEdited,
+        } : null,
         user: {
           id: app.user.id,
           name: snapshot.applicantName || app.user.name || 'Unknown',

@@ -94,10 +94,7 @@ export const jobsService = {
 
     async fetchJobMatches(options?: { cache?: RequestCache; revalidate?: number }) {
         const response = await fetch('/api/jobs/matches', {
-            cache: options?.cache || 'force-cache',
-            next: {
-                revalidate: options?.revalidate || 300,
-            },
+            method: 'GET',
         });
 
         const data = await response.json();

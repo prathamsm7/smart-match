@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { applicationsService } from "@/lib/services/applications.service";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { StatusUpdateDropdown } from "./StatusUpdateDropdown";
+import { CoverLetterDisplay } from "./CoverLetterDisplay";
 
 interface CandidateDetailProps {
     candidate: Candidate;
@@ -114,6 +115,11 @@ export function CandidateDetail({ candidate, application, onStatusUpdate }: Cand
                 )}
                 
             </div>
+
+            {/* Cover Letter */}
+            {application.coverLetter && (
+                <CoverLetterDisplay coverLetter={application.coverLetter} />
+            )}
 
             {/* Summary */}
             {candidate.summary && (

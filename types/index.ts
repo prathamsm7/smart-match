@@ -43,6 +43,11 @@ export interface Application {
     matchScore?: number;
     status: 'SUBMITTED' | 'VIEWED' | 'SHORTLISTED' | 'INTERVIEW' | 'REJECTED' | 'HIRED' | 'WITHDRAWN';
     statusUpdatedAt?: string;
+    coverLetter?: {
+        id: string;
+        text: string;
+        isEdited: boolean;
+    } | null;
 }
 
 export interface JobWithApplications extends Job {
