@@ -102,9 +102,9 @@ export async function POST(
 
         // 7. Calculate final score
         const finalScoreRaw = Number((
-            vectorScore * 0.65 +
-            skillMatch.skillRatio * 0.25 +
-            skillMatch.experienceRatio * 0.05
+            skillMatch.skillRatio * 0.65 +
+            vectorScore * 0.15 +
+            skillMatch.experienceRatio * 0.20
         ).toFixed(3));
         const finalScore = Math.round(finalScoreRaw * 100);
 

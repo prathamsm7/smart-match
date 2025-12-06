@@ -56,6 +56,7 @@ export async function searchJobsForResume(resumeId: string) {
             limit: 20, // Increased limit for better results
             with_payload: true,
             with_vector: false,
+            score_threshold: 0.65,
         });
 
         if (!matches || matches.length === 0) {
