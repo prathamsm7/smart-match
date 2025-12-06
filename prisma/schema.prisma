@@ -41,12 +41,12 @@ model Job {
   title               String
   employerName        String?
   description      String?
-  requirements     Json?
+  requirements     String?
   location         String?
   salary           String?
   employmentType   String?
   applyLink        String?
-  responsibilities Json?
+  responsibilities String?
   postedBy       String? // User ID of the recruiter who posted this job
   poster         User?   @relation("JobPoster", fields: [postedBy], references: [id])
   createdAt           DateTime @default(now())

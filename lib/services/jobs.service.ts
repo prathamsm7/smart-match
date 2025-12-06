@@ -9,8 +9,8 @@ interface CreateJobData {
     location?: string;
     salary?: string;
     employmentType?: string;
-    requirements?: any;
-    responsibilities?: any;
+    requirements?: string;
+    responsibilities?: string;
 }
 
 export const jobsService = {

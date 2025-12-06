@@ -164,7 +164,7 @@ async function explainMatchAndSkillGap(resume: any, job: any) {
                     Summary: ${resume.summary || ""}
 
                     Job Description: ${job.jobDescription || ""}
-                    Job Requirements: ${job?.jobRequirements?.map((r: any) => typeof r === 'string' ? r : r.requirement).join(", ") || ""}
+                    Job Requirements: ${job?.jobRequirements || ""}
 
                     Task:
                     - Compare job required skills vs your skills
@@ -235,7 +235,7 @@ async function calculateSkillAndExperienceMatch(resume: any, job: any) {
         Title: ${job.jobTitle || ""}
         Description: ${job.jobDescription || ""}
         Responsibilities: ${job.jobResponsibilities || ""}
-        Requirements: ${job.jobRequirements?.map((r: any) => typeof r === 'string' ? r : r.requirement).join(", ") || ""}
+        Requirements: ${job.jobRequirements || ""}
         
         TASKS:
         1. Extract ALL technical skills, tools, frameworks, and technologies mentioned in the job posting
@@ -542,7 +542,7 @@ export interface JobData {
     title: string;
     employerName?: string;
     description?: string;
-    requirements?: any;
+    requirements?: string;
     location?: string;
     salary?: string;
     employmentType?: string;
@@ -559,18 +559,10 @@ export async function storeJob(jobData: JobData): Promise<string> {
             jobData.title,
             jobData.employerName,
             jobData.description,
-            // Handle responsibilities (can be string, array, or object)
-            Array.isArray(jobData.responsibilities)
-                ? jobData.responsibilities.join(' ')
-                : typeof jobData.responsibilities === 'object' && jobData.responsibilities !== null
-                    ? JSON.stringify(jobData.responsibilities)
-                    : String(jobData.responsibilities || ''),
-            // Handle requirements (can be array or object)
-            Array.isArray(jobData.requirements)
-                ? jobData.requirements.join(' ')
-                : typeof jobData.requirements === 'object' && jobData.requirements !== null
-                    ? JSON.stringify(jobData.requirements)
-                    : String(jobData.requirements || ''),
+            // Handle responsibilities (now string)
+            String(jobData.responsibilities || ''),
+            // Handle requirements (now string)
+            String(jobData.requirements || ''),
         ].filter(Boolean).join(' ');
 
         // 3. Generate embedding

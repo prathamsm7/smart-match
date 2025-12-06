@@ -13,7 +13,7 @@ interface GenerateCoverLetterParams {
   jobTitle: string;
   company: string;
   description: string;
-  requirements?: any;
+  requirements?: string;
 }
 
 interface RegenerateCoverLetterParams {
@@ -21,7 +21,7 @@ interface RegenerateCoverLetterParams {
   jobTitle: string;
   company: string;
   description: string;
-  requirements?: any;
+  requirements?: string;
 }
 
 export const coverLetterService = {

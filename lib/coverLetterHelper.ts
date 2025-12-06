@@ -13,7 +13,7 @@ interface GenerateCoverLetterParams {
     title: string;
     company: string;
     description: string;
-    requirements?: any;
+    requirements?: string;
   };
 }
 
@@ -27,20 +27,8 @@ export async function generateCoverLetter(
     ?.map((exp: any) => `${exp.title || exp.role} at ${exp.company || 'N/A'}: ${exp.description || ''}`)
     .join('\n') || 'No experience listed';
 
-  // Format requirements if available
-  let requirementsText = '';
-  if (jobData.requirements) {
-    if (Array.isArray(jobData.requirements)) {
-      requirementsText = jobData.requirements
-        .map((r: any) => (typeof r === 'string' ? r : r.requirement || ''))
-        .filter(Boolean)
-        .join(', ');
-    } else if (typeof jobData.requirements === 'object') {
-      requirementsText = JSON.stringify(jobData.requirements);
-    } else {
-      requirementsText = String(jobData.requirements);
-    }
-  }
+  // Format requirements if available (now string)
+  const requirementsText = jobData.requirements || '';
 
   // Build the prompt
   const prompt = `You are a professional career coach helping a candidate write a compelling cover letter.
