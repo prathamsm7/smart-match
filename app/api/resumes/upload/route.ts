@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Run the master agent
-        const {resumeId} = await runResumeAgent(text);
+        const {resumeId=''} = await runResumeAgent(text) as {resumeId?: string};
         console.log("🚀 ~ POST ~ result:", resumeId)
 
         // If successful, we need to associate the resume with the user
