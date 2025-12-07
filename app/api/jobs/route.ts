@@ -39,7 +39,20 @@ export async function POST(request: NextRequest) {
     // 4. Get job data from request
     const jobData: JobData = await request.json();
 
-    // 5. Validate required fields
+    // 5. Validate and normalize data - ensure requirements and responsibilities are strings
+    if (Array.isArray(jobData.requirements)) {
+      jobData.requirements = jobData.requirements.join('\n');
+    } else if (jobData.requirements && typeof jobData.requirements !== 'string') {
+      jobData.requirements = String(jobData.requirements);
+    }
+
+    if (Array.isArray(jobData.responsibilities)) {
+      jobData.responsibilities = jobData.responsibilities.join('\n');
+    } else if (jobData.responsibilities && typeof jobData.responsibilities !== 'string') {
+      jobData.responsibilities = String(jobData.responsibilities);
+    }
+
+    // 6. Validate required fields
     if (!jobData.title) {
       return NextResponse.json(
         { error: 'Job title is required' },
@@ -47,7 +60,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Store job in both PostgreSQL and Qdrant with postedBy
+    // 7. Store job in both PostgreSQL and Qdrant with postedBy
     const jobId = await storeJob({
       ...jobData,
       postedBy: dbUser.id,

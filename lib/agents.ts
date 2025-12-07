@@ -1,138 +1,94 @@
 import { embed } from 'ai';
 import { Agent, tool, run } from "@openai/agents";
 import { google } from '@ai-sdk/google';
-import "pdf-parse/worker";
-import { PDFParse, VerbosityLevel } from "pdf-parse";
 import { z } from 'zod';
-import crypto from "crypto";
-import resumeSchema from './schema';
 import { normalizeExperienceScore } from './helpers';
 import redisClient from './redisClient';
 import { prisma } from './prisma';
-import { geminiClient, openaiClient, qdrantClient } from './clients';
+import { openaiClient, qdrantClient } from './clients';
 
 
-// Helper function to embed text using Google's embedding model
+/**
+ * Helper function to embed text using OpenAI's embedding model
+ * Used specifically for resume embeddings
+ */
 async function embedText(text: string) {
     try {
-        const { embedding } = await embed({
-            model: google.textEmbeddingModel('gemini-embedding-001'),
-            value: text,
+        const response = await openaiClient.embeddings.create({
+            model: "text-embedding-3-large",
+            input: text,
         });
-        return embedding;
+        return response.data[0].embedding;
     } catch (error) {
         console.error("❌ Error embedding text:", error);
         throw error;
     }
 }
 
-const extractResumeData = tool({
-    name: 'extractResumeData',
-    description: `Extract structured resume information including name, email, skills, experience, and calculate total years of experience. Returns the resume data in JSON format.
-            
-                    CRITICAL: For totalExperienceYears calculation:
-                    - Calculate EACH experience duration separately in months
-                    - If endDate is "Present", "Current", or "Now", use November 2025
-                    - Formula: months = (end_year - start_year) * 12 + (end_month - start_month + 1)
-                    - Convert to years: years = months / 12
-                    - SUM all experience durations
-                    - Round final total to 1 decimal place
-                    - Return as NUMBER type
 
-                    Example calculation:
-                    - August 2022 to November 2025 = 40 months = 3.33 years
-                    - September 2019 to July 2021 = 23 months = 1.92 years  
-                    - September 2018 to July 2019 = 11 months = 0.92 years
-                    Total: 3.33 + 1.92 + 0.92 = 6.17 → 6.2 years
+/**
+ * Generate AI-enhanced embedding text for jobs
+ * Emphasizes required skills, domain requirements, and specific technologies
+ * to improve matching accuracy and avoid cross-domain false matches
+ */
+async function generateEnhancedJobEmbeddingText(jobData: JobData): Promise<string> {
+    try {
+        // Use LLM to extract and emphasize domain-specific requirements
+        const prompt = `You are an expert at creating domain-aware text embeddings for job matching.
+                        Given a job posting, create an enhanced text representation that emphasizes:
+                        1. Required domain-specific technical skills and technologies (e.g., React, Python, TensorFlow)
+                        2. Job domain/specialization (e.g., Frontend Development, Machine Learning Engineering, DevOps)
+                        3. Required vs nice-to-have skills
+                        4. Specific technologies, frameworks, and tools mentioned
+                        5. Experience level requirements
 
-                    For social media profiles, return the url of the profile mentioned in the resume. If no social media profile is mentioned, return an empty array. Sometimes links are clickable, so return the url as it is. dont add any other text to the url.
+                        Job Information:
+                        - Title: ${jobData.title || 'N/A'}
+                        - Description: ${jobData.description || 'N/A'}
+                        - Requirements: ${jobData.requirements || 'N/A'}
+                        - Responsibilities: ${jobData.responsibilities || 'N/A'}
 
-                    CRITICAL: For categorizedSkills, you must categorize ALL skills from the skills array into appropriate categories:
-                    - languages: Programming languages (Java, JavaScript, Python, TypeScript, HTML, CSS, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, etc.)
-                    - frameworks: Frameworks and libraries (React, Next.js, Vue, Angular, Spring, Spring Boot, Express.js, Django, Flask, Laravel, Tailwind CSS, Bootstrap, Shadcn/UI, etc.)
-                    - ai: AI and Machine Learning technologies (Generative AI, LLMs, LangChain, Prompt Engineering, OpenAI APIs, ChatGPT, DALL-E, Hugging Face Transformers, RAG, Machine Learning, etc.)
-                    - databases: Databases and systems (MongoDB, MySQL, PostgreSQL, Redis, SQLite, Oracle, Vector Databases, Elasticsearch, DBMS, etc.)
-                    - tools: Tools and technologies (Git, GitHub, VS Code, Postman, Vercel, AWS, Azure, GCP, Docker, Kubernetes, Jenkins, CI/CD, Hibernate, Node.js, etc.)
-                    - other: Other technical skills that don't fit above categories (RESTful APIs, OOP, System Design, Cloud Computing, Software Engineering, CN, DSA, OS, etc.)
-                    
-                    Every skill from the skills array MUST be placed in at least one category. Be intelligent about categorization - if a skill could fit multiple categories, choose the most appropriate one. If unsure, place in "other".
+                        Create a concise, domain-focused text (max 500 words) that:
+                        - Emphasizes specific required technologies, frameworks, and tools (not generic terms)
+                        - Clearly identifies the job domain/specialization (e.g., "Frontend Developer role requiring React and TypeScript" vs generic "Software Engineer")
+                        - Distinguishes between required skills and nice-to-have skills
+                        - Highlights domain-specific requirements that differentiate this job from others in different domains
+                        - Avoids generic terms that match across all domains (like "build", "test", "software engineer" without context)
+                        - If the job is for a specific domain (e.g., AI Engineer, Frontend Developer), make that domain very clear
 
-                    CRITICAL: For softSkills, extract all soft skills, interpersonal abilities, and non-technical competencies mentioned in the resume. These include:
-                    - Communication skills (e.g., English Communication, Technical Communication, Written Communication, Verbal Communication)
-                    - Problem-solving abilities (e.g., Problem Solving, Critical Thinking, Analytical Thinking)
-                    - Team and collaboration skills (e.g., Team Collaboration, Leadership, Teamwork, Cross-functional Collaboration)
-                    - Work methodologies (e.g., Agile Methodologies, Scrum, Kanban)
-                    - Personal attributes (e.g., Adaptability, Time Management, Organization, Attention to Detail)
-                    - Other soft skills mentioned in the resume (e.g., Aptitude, Logical Reasoning, Technical Writing, Presentation Skills)
-                    
-                    Only include soft skills that are explicitly mentioned or clearly implied in the resume. Do not add generic soft skills that are not mentioned.
+                        Output ONLY the enhanced text, no explanations or markdown.`;
 
-                `,
-    parameters: resumeSchema,
-    execute: async (resumeData: any) => {
-        return resumeData;
-    },
-})
+        const response = await openaiClient.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are an expert at creating domain-aware text for semantic search. Create concise, technical, domain-specific text that emphasizes unique requirements and technologies.'
+                },
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.3,
+            max_tokens: 600,
+        });
 
-const uploadResume = tool({
-    name: 'uploadResume',
-    description: `Upload the extracted resume data to the vector database. Takes the structured resume object and stores it with embeddings.`,
-    parameters: resumeSchema,
-    execute: async (resumeData: any) => {
-        try {
-            console.log("\n📤 Uploading resume to database...");
-
-            // Create vector text from resume content
-            const vectorText = [
-                resumeData.summary,
-                resumeData.skills?.join(", "),
-                resumeData.experience?.map((e: any) => `${e.title} at ${e.company}: ${e.description}`).join(" "),
-            ].filter(Boolean).join(" ");
-
-            // Generate embedding
-            const vector = await embedText(vectorText);
-
-            // Generate unique ID
-            const resumeId = crypto.randomUUID();
-            console.log(`🆔 Generated Resume ID: ${resumeId}`);
-
-            // Upstash Redis uses 'ex' (lowercase) for expiration in seconds
-            await redisClient.set(`resumeData:${resumeId}`, JSON.stringify({ resumeData, vector }), { ex: 7 * 24 * 60 * 60 });
-
-            // Upload to Qdrant
-            const response = await qdrantClient.upsert("resumes", {
-                points: [
-                    {
-                        id: resumeId,
-                        vector: vector,
-                        payload: resumeData,
-                    },
-                ],
-            });
-
-
-            return {
-                success: true,
-                resumeId: resumeId,
-                message: `Resume for ${resumeData.name} uploaded successfully`
-            };
-        } catch (error: any) {
-            console.error("❌ Error uploading resume:", error);
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    },
-})
-
-// Helper function to extract text from PDF buffer
-export async function extractTextFromPDFBuffer(buffer: Buffer) {
-    const parser = new PDFParse({ data: buffer, verbosity: VerbosityLevel.WARNINGS });
-    const result = await parser.getText();
-    await parser.destroy();
-    return result.text;
+        const enhancedText = response.choices[0]?.message?.content?.trim() || '';
+        
+        return enhancedText;
+    } catch (error) {
+        console.error('❌ Error generating enhanced job embedding text:', error);
+        // Fallback to original text
+        return [
+            jobData.title,
+            jobData.description,
+            jobData.requirements,
+            jobData.responsibilities
+        ].filter(Boolean).join(' ');
+    }
 }
+
 
 // Helper functions for job matching
 async function explainMatchAndSkillGap(resume: any, job: any) {
@@ -448,46 +404,22 @@ const searchJobs = tool({
     }
 })
 
-// ✅ Single Master Agent (no manual handoffs) that decides which tools to call and when
-const masterResumeAgent = new Agent({
-    name: "MasterResumeAgent",
+// ✅ Job Search Agent - searches for jobs matching a resume ID
+const jobSearchAgent = new Agent({
+    name: "JobSearchAgent",
     model: "gpt-5-nano",
-    instructions: `You are a master agent that manages resumes and job matching using tools.
+    instructions: `You are a job search agent that finds matching jobs for a resume.
             
-            Inputs you may receive:
-            - source: "id" or "file"
-            - If source="id": resumeId is provided
-            - If source="file": resumeText is provided (raw text of the resume)
+            Input: resumeId (string)
             
-            Primary objectives:
-            1) If source="id" (or a resumeId is present), call searchJobs with the given resumeId to return top job matches.
-            2) If source="file", FIRST parse the resumeText into a structured resume object by calling extractResumeData,
-               THEN call uploadResume with the EXACT SAME structured object to store it and get a resumeId,
-               THEN (ONLY if the task message does NOT say "skip job search" or "do not search for jobs") call searchJobs with that resumeId to return top job matches.
+            Task: Call searchJobs with the provided resumeId to return top job matches.
             
             Rules:
             - Do not ask the user to call tools; you decide and call them yourself.
-            - When extracting, ensure totalExperienceYears follows the inclusive month-counting rule described in extractResumeData.
-            - When uploading, pass the SAME structured object as returned from extractResumeData (no modifications).
-            - If the task message says "skip job search" or "do not search for jobs", STOP after uploading the resume and return only the resumeId.
-            
-            FINAL RESPONSE FORMAT (CRITICAL):
-            - If job search was skipped (task says "skip job search" or "do not search for jobs"), return:
-              {
-                "resumeId": "<the resumeId returned from uploadResume>"
-              }
-            - If job search was performed, return:
-              {
-                "resumeId": "<the resumeId returned from uploadResume>",
-                "matches": [ /* array returned from searchJobs (can be empty) */ ]
-              }
-            - "resumeId" MUST come from the uploadResume tool call result.
-            - "matches" MUST come from the searchJobs tool call result (only if job search was performed).
-            - Do NOT return plain arrays or any other structure; always wrap in the JSON object above.
-
-            CRITICAL: When you receive the result from searchJobs, DO NOT generate a text summary. Output the JSON tool result immediately as your final answer.
+            - Return the results from searchJobs directly.
+            - Do NOT generate a text summary. Output the JSON tool result immediately as your final answer.
     `,
-    tools: [extractResumeData, uploadResume, searchJobs],
+    tools: [searchJobs],
 });
 
 async function runMasterAgent({ source, resumeId, filePath, resumeText, skipJobSearch = false }: {
@@ -497,39 +429,14 @@ async function runMasterAgent({ source, resumeId, filePath, resumeText, skipJobS
     resumeText?: string;
     skipJobSearch?: boolean;
 }) {
-    if (source !== 'id' && source !== 'file') {
-        throw new Error(`Invalid source "${source}". Use "id" or "file".`);
+    // This function is deprecated - resume upload is now handled by resumeHelper.ts
+    // Only job search functionality remains here
+    if (source === 'id' && resumeId) {
+        const result = await run(jobSearchAgent, `Task: Find matching jobs for resumeId: ${resumeId}`);
+        return result;
     }
-
-    let textBlock = '';
-    if (source === 'file') {
-        let text = resumeText;
-        if (!text && filePath) {
-            // This won't work in Next.js API routes, but kept for compatibility
-            throw new Error('File path not supported in Next.js. Use resumeText instead.');
-        }
-        if (!text) {
-            throw new Error('When source="file", provide either "resumeText" or "filePath".');
-        }
-        textBlock = `\nresumeText: """\n${text}\n"""`;
-    }
-
-    // Build task message based on whether job search should be skipped
-    let taskMessage = '';
-    if (skipJobSearch && source === 'file') {
-        taskMessage = 'Task: Extract and upload the resume. DO NOT search for jobs. Skip job search. Just return the resumeId.';
-    } else if (source === 'id') {
-        taskMessage = 'Task: Return the top job matches for this user. Call searchJobs with the provided resumeId.';
-    } else {
-        taskMessage = 'Task: Return the top job matches for this user. Decide which tools to call and when.';
-    }
-
-    const message = `${taskMessage} source: ${source}
-                    ${resumeId ? `resumeId: ${resumeId}\n` : ''}${textBlock}
-                `;
-
-    const result = await run(masterResumeAgent, message);
-    return result;
+    
+    throw new Error('Resume upload functionality has been moved to resumeHelper.ts. Use runResumeAgent from resumeHelper.ts instead.');
 }
 
 /**
@@ -554,16 +461,9 @@ export interface JobData {
 export async function storeJob(jobData: JobData): Promise<string> {
     try {
 
-        // 2. Create vector text for embedding
-        const vectorText = [
-            jobData.title,
-            jobData.employerName,
-            jobData.description,
-            // Handle responsibilities (now string)
-            String(jobData.responsibilities || ''),
-            // Handle requirements (now string)
-            String(jobData.requirements || ''),
-        ].filter(Boolean).join(' ');
+        // 2. Generate AI-enhanced embedding text for better domain-aware matching
+        const vectorText = await generateEnhancedJobEmbeddingText(jobData);
+        console.log("✅ Generated enhanced job embedding text");
 
         // 3. Generate embedding
         const vector = await embedText(vectorText);
@@ -583,7 +483,7 @@ export async function storeJob(jobData: JobData): Promise<string> {
                 postedBy: jobData.postedBy || null,
             },
         });
-
+        
         // 5. Store ONLY vector + jobId in Qdrant (no full payload)
         await qdrantClient.upsert('jobs', {
             points: [
@@ -606,5 +506,11 @@ export async function storeJob(jobData: JobData): Promise<string> {
 }
 
 // Export helper functions for use in API routes
-export { runMasterAgent, calculateSkillAndExperienceMatch, explainMatchAndSkillGap, embedText };
+export { 
+    runMasterAgent, 
+    calculateSkillAndExperienceMatch, 
+    explainMatchAndSkillGap, 
+    embedText,
+    generateEnhancedJobEmbeddingText
+};
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { runMasterAgent } from '@/lib/agents';
-import { extractTextFromPDFBuffer } from '@/lib/agents';
+import { extractTextFromPDFBuffer, runResumeAgent } from '@/lib/resumeHelper';
 import { qdrantClient } from '@/lib/clients';
 import { prisma } from '@/lib/prisma';
 import { createServerSupabase } from '@/lib/superbase/server';
@@ -26,14 +25,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Run the master agent
-        const result = await runMasterAgent({
-            source: 'file',
-            resumeText: text,
-            skipJobSearch,
-        }) as any;
+        const {resumeId} = await runResumeAgent(text);
+        console.log("🚀 ~ POST ~ result:", resumeId)
 
         // If successful, we need to associate the resume with the user
-        if (result.resumeId) {
+        if (resumeId) {
             const supabase = await createServerSupabase();
             const { data: { user } } = await supabase.auth.getUser();
 
@@ -46,7 +42,7 @@ export async function POST(request: NextRequest) {
                 if (dbUser) {
                     // Get the resume data from Qdrant to save to Postgres
                     const qdrantResult = await qdrantClient.retrieve('resumes', {
-                        ids: [result.resumeId],
+                        ids: [resumeId],
                         with_payload: true
                     });
 
@@ -61,9 +57,9 @@ export async function POST(request: NextRequest) {
                         // Save to Postgres
                         await prisma.resume.create({
                             data: {
-                                id: result.resumeId,
+                                id: resumeId,
                                 userId: dbUser.id,
-                                vectorId: result.resumeId,
+                                vectorId: resumeId,
                                 json: payload,
                                 isPrimary: resumeCount === 0, // First resume is primary by default
                             }
@@ -73,7 +69,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        return NextResponse.json(result);
+        return NextResponse.json({ resumeId });
     } catch (error: any) {
         console.error('Error processing resume:', error);
         return NextResponse.json(

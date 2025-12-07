@@ -56,30 +56,20 @@ export function JobPostingForm({ onSuccess, onCancel, initialData }: JobPostingF
     setSuccess(false);
   };
 
-  const parseRequirements = (text: string): any => {
+  const parseRequirements = (text: string): string | null => {
     if (!text.trim()) return null;
     
-    // Try to parse as JSON first
-    try {
-      return JSON.parse(text);
-    } catch {
-      // If not JSON, split by newlines and return as array
-      const lines = text.split("\n").filter(line => line.trim());
-      return lines.length > 0 ? lines : null;
-    }
+    // Return as string - Prisma expects String or Null
+    // If it's already a string, return it; otherwise convert to string
+    return text.trim();
   };
 
-  const parseResponsibilities = (text: string): any => {
+  const parseResponsibilities = (text: string): string | null => {
     if (!text.trim()) return null;
     
-    // Try to parse as JSON first
-    try {
-      return JSON.parse(text);
-    } catch {
-      // If not JSON, split by newlines and return as array
-      const lines = text.split("\n").filter(line => line.trim());
-      return lines.length > 0 ? lines : null;
-    }
+    // Return as string - Prisma expects String or Null
+    // If it's already a string, return it; otherwise convert to string
+    return text.trim();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

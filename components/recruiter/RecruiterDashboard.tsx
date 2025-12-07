@@ -10,9 +10,11 @@ import {
   ArrowRight,
   Building2,
   Clock,
+  Upload,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { dashboardService } from "@/lib/services";
+import { BulkJobPoster } from "./BulkJobPoster";
 
 interface RecruiterStats {
   totalJobs: number;
@@ -39,6 +41,7 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
   const [recentApplications, setRecentApplications] = useState<RecentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showBulkPoster, setShowBulkPoster] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -123,13 +126,23 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
               Manage your job postings and review applicants.
             </p>
           </div>
-          <button
-            onClick={() => onNavigate("jobs")}
-            className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/50 transition flex items-center space-x-2"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Post New Job</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowBulkPoster(true)}
+              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition flex items-center space-x-2"
+              title="Bulk Post Jobs (Testing)"
+            >
+              <Upload className="w-5 h-5" />
+              <span>Bulk Post (Test)</span>
+            </button>
+            <button
+              onClick={() => onNavigate("jobs")}
+              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/50 transition flex items-center space-x-2"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Post New Job</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -276,6 +289,17 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
             </button>
           </div>
         </div>
+      )}
+
+      {/* Bulk Job Poster Modal */}
+      {showBulkPoster && (
+        <BulkJobPoster
+          onSuccess={() => {
+            setShowBulkPoster(false);
+            fetchDashboardData();
+          }}
+          onCancel={() => setShowBulkPoster(false)}
+        />
       )}
     </div>
   );

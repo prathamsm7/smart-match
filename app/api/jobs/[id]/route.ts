@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createServerSupabase } from '@/lib/superbase/server';
-import { storeJob, JobData } from '@/lib/agents';
+import { storeJob, JobData, embedText, generateEnhancedJobEmbeddingText } from '@/lib/agents';
 import { qdrantClient } from '@/lib/clients';
 
 // GET a single job
@@ -112,6 +112,19 @@ export async function PUT(
     // 6. Get updated job data
     const jobData: JobData = await request.json();
 
+    // 6.5. Normalize data - ensure requirements and responsibilities are strings
+    if (Array.isArray(jobData.requirements)) {
+      jobData.requirements = jobData.requirements.join('\n');
+    } else if (jobData.requirements && typeof jobData.requirements !== 'string') {
+      jobData.requirements = String(jobData.requirements);
+    }
+
+    if (Array.isArray(jobData.responsibilities)) {
+      jobData.responsibilities = jobData.responsibilities.join('\n');
+    } else if (jobData.responsibilities && typeof jobData.responsibilities !== 'string') {
+      jobData.responsibilities = String(jobData.responsibilities);
+    }
+
     // 7. Update job in PostgreSQL
     const updatedJob = await prisma.job.update({
       where: { id },
@@ -128,35 +141,33 @@ export async function PUT(
       },
     });
 
-    // 8. Update vector in Qdrant (re-embed with new data)
-    const vectorText = [
-      updatedJob.title,
-      updatedJob.employerName,
-      updatedJob.description,
-      Array.isArray(updatedJob.responsibilities)
-        ? updatedJob.responsibilities.join(' ')
-        : typeof updatedJob.responsibilities === 'object' && updatedJob.responsibilities !== null
-          ? JSON.stringify(updatedJob.responsibilities)
-          : String(updatedJob.responsibilities || ''),
-      Array.isArray(updatedJob.requirements)
-        ? updatedJob.requirements.join(' ')
-        : typeof updatedJob.requirements === 'object' && updatedJob.requirements !== null
-          ? JSON.stringify(updatedJob.requirements)
+    // 8. Update vector in Qdrant (re-embed with new data using enhanced embedding)
+    const jobDataForEmbedding: JobData = {
+      title: updatedJob.title,
+      employerName: updatedJob.employerName || undefined,
+      description: updatedJob.description || undefined,
+      requirements: typeof updatedJob.requirements === 'string' 
+        ? updatedJob.requirements 
+        : Array.isArray(updatedJob.requirements)
+          ? updatedJob.requirements.join(' ')
           : String(updatedJob.requirements || ''),
-    ].filter(Boolean).join(' ');
+      responsibilities: typeof updatedJob.responsibilities === 'string'
+        ? updatedJob.responsibilities
+        : Array.isArray(updatedJob.responsibilities)
+          ? updatedJob.responsibilities.join(' ')
+          : String(updatedJob.responsibilities || ''),
+    };
 
-    const { embed } = await import('ai');
-    const { google } = await import('@ai-sdk/google');
-    const { embedding } = await embed({
-      model: google.textEmbeddingModel('gemini-embedding-001'),
-      value: vectorText,
-    });
+    const vectorText = await generateEnhancedJobEmbeddingText(jobDataForEmbedding);
+    console.log("✅ Generated enhanced job embedding text for update");
+
+    const vector = await embedText(vectorText);
 
     await qdrantClient.upsert('jobs', {
       points: [
         {
           id: updatedJob.id,
-          vector: embedding,
+          vector: vector,
           payload: {
             id: updatedJob.id,
           },
