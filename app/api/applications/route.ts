@@ -212,6 +212,14 @@ export async function GET(request: NextRequest) {
                         isPrimary: true,
                         createdAt: true
                     }
+                },
+                interview: {
+                    select: {
+                        id: true,
+                        status: true,
+                        startedAt: true,
+                        completedAt: true,
+                    }
                 }
             }
         });

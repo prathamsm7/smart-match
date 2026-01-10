@@ -48,6 +48,13 @@ export interface Application {
         text: string;
         isEdited: boolean;
     } | null;
+    interview?: {
+        id: string;
+        status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+        startedAt: string | null;
+        completedAt: string | null;
+        hasReport: boolean;
+    } | null;
 }
 
 export interface JobWithApplications extends Job {

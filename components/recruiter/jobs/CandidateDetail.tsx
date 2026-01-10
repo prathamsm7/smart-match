@@ -1,8 +1,9 @@
 "use client";
-import { Mail, Phone, MapPin, Award, Download, FileText, Code, Languages, Briefcase } from "lucide-react";
+import { Mail, Phone, MapPin, Award, Download, FileText, Code, Languages, Briefcase, ClipboardCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Candidate, Application } from "@/types";
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { applicationsService } from "@/lib/services/applications.service";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { StatusUpdateDropdown } from "./StatusUpdateDropdown";
@@ -15,6 +16,8 @@ interface CandidateDetailProps {
 }
 
 export function CandidateDetail({ candidate, application, onStatusUpdate }: CandidateDetailProps) {
+    const router = useRouter();
+    
     useEffect(() => {
         if (application.status === 'SUBMITTED') {
             applicationsService.markAsViewed(application.id).catch((error) => {
@@ -26,6 +29,12 @@ export function CandidateDetail({ candidate, application, onStatusUpdate }: Cand
     async function handleStatusUpdate(applicationId: string, newStatus: string) {
         if (onStatusUpdate) {
             await onStatusUpdate(applicationId, newStatus);
+        }
+    }
+
+    function handleViewInterviewReport() {
+        if (application.interview?.id) {
+            router.push(`/interview/report?interviewId=${application.interview.id}`);
         }
     }
 
@@ -81,12 +90,22 @@ export function CandidateDetail({ candidate, application, onStatusUpdate }: Cand
                 </div>
 
                 {/* Status Update Dropdown */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                     <StatusUpdateDropdown
                         currentStatus={application.status || 'SUBMITTED'}
                         applicationId={application.id}
                         onStatusUpdate={handleStatusUpdate}
                     />
+                    {application.interview && (application.interview.status === 'COMPLETED' || application.interview.hasReport) && (
+                        <button 
+                            onClick={handleViewInterviewReport}
+                            className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-lg transition flex items-center gap-2 text-white font-medium"
+                            title="View Interview Report"
+                        >
+                            <ClipboardCheck className="w-5 h-5" />
+                            View Interview Report
+                        </button>
+                    )}
                     <button 
                         className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition flex items-center justify-center"
                         title="Download Resume"

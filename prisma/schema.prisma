@@ -22,6 +22,7 @@ model User {
   applications JobApplication[]
   postedJobs   Job[]            @relation("JobPoster")
   coverLetters CoverLetter[]
+  interviews   Interview[]
   createdAt    DateTime         @default(now())
 }
 
@@ -73,6 +74,7 @@ model JobApplication {
   resume Resume @relation(fields: [resumeId], references: [id])
   job    Job    @relation(fields: [jobId], references: [id])
   coverLetter CoverLetter?
+  interview   Interview?
 }
 
 model CoverLetter {
@@ -103,6 +105,27 @@ model CoverLetter {
   @@index([applicationId])
 }
 
+model Interview {
+  id            String          @id @default(uuid())
+  applicationId String          @unique
+  userId        String          // Candidate user ID
+  status        InterviewStatus @default(PENDING)
+  transcript    Json?           // Interview transcript stored as JSON
+  report        Json?           // Interview report stored as JSON
+  reportId      String?         // Reference to interview report (legacy)
+  startedAt     DateTime?       // When interview was started
+  completedAt   DateTime?       // When interview was completed/failed
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  user        User            @relation(fields: [userId], references: [id])
+  application JobApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([applicationId])
+  @@index([status])
+}
+
 enum ApplicationStatus {
   SUBMITTED
   VIEWED
@@ -111,4 +134,12 @@ enum ApplicationStatus {
   REJECTED
   HIRED
   WITHDRAWN
+}
+
+enum InterviewStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
 }

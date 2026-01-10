@@ -15,6 +15,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { getUserInitials, getUserDisplayName, getUserTitle } from './utils/userHelpers';
+import { useRouter } from "next/navigation";
 
 export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings' | 'jobs' | 'test';
 
@@ -37,6 +38,7 @@ export function DashboardSidebar({
   currentView,
   onViewChange,
 }: DashboardSidebarProps) {
+  const router = useRouter();
   const userInitials = getUserInitials(user);
   const userDisplayName = getUserDisplayName(user);
   const userTitle = userRole === 'recruiter' ? 'Recruiter' : getUserTitle();
@@ -93,7 +95,13 @@ export function DashboardSidebar({
           {navigationItems.map((item, index) => (
             <button
               key={index}
-              onClick={() => onViewChange(item.view)}
+              onClick={() => {
+                if (item.view === 'interviews') {
+                  router.push("/interview");
+                } else {
+                  onViewChange(item.view);
+                }
+              }}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition group ${
                 currentView === item.view
                   ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/30'

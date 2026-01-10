@@ -87,6 +87,15 @@ export async function GET(
             isEdited: true,
           },
         },
+        interview: {
+          select: {
+            id: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+            report: true,
+          },
+        },
       },
     });
 
@@ -105,6 +114,13 @@ export async function GET(
           id: app.coverLetter.id,
           text: app.coverLetter.finalText || app.coverLetter.generatedText,
           isEdited: app.coverLetter.isEdited,
+        } : null,
+        interview: app.interview ? {
+          id: app.interview.id,
+          status: app.interview.status,
+          startedAt: app.interview.startedAt,
+          completedAt: app.interview.completedAt,
+          hasReport: !!app.interview.report,
         } : null,
         user: {
           id: app.user.id,

@@ -122,6 +122,23 @@ export async function PATCH(
         },
       });
 
+      // Create interview if status is INTERVIEW or HIRED and interview doesn't exist
+      if (status === ApplicationStatus.INTERVIEW || status === ApplicationStatus.HIRED) {
+        const existingInterview = await prisma.interview.findUnique({
+          where: { applicationId: id },
+        });
+
+        if (!existingInterview) {
+          await prisma.interview.create({
+            data: {
+              applicationId: id,
+              userId: application.userId,
+              status: 'PENDING',
+            },
+          });
+        }
+      }
+
       return NextResponse.json({
         success: true,
         application: updated,

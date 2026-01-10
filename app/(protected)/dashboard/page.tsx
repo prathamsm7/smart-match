@@ -10,7 +10,7 @@ import { JobMatchesView } from '@/components/candidate/JobMatchesView';
 import { ApplicationsView } from '@/components/candidate/ApplicationsView';
 import { JobsDashboard } from '@/components/recruiter/JobsDashboard';
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
-import TestComponent from '@/components/ui/TestComponent';
+import { InterviewsView } from '@/components/candidate/interviews/InterviewsView';
 
 export default function DashboardPage() {
   const supabase = createBrowserSupabase();
@@ -76,7 +76,7 @@ export default function DashboardPage() {
   // Note: Auth check is handled by layout, but we need to wait for user data
   if (authLoading || !user || loadingRole) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-950 via-slate-900 to-slate-950">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
           <p className="mt-4 text-gray-400">Loading...</p>
@@ -109,15 +109,9 @@ export default function DashboardPage() {
         return (
           <JobsDashboard userId={user.id} />
         );
-      case 'test':
-        return (
-          <TestComponent />
-        );
       case 'interviews':
         return (
-          <div className="text-center py-12">
-            <p className="text-gray-400">Interviews view coming soon...</p>
-          </div>
+          <InterviewsView userId={user?.id || ""} />
         );
       case 'network':
         return (
@@ -149,7 +143,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       <DashboardSidebar
         user={user}
         userRole={userRole}
