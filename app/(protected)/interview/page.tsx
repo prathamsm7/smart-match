@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { LiveInterview } from "@/components/candidate/interviews/LiveInterview";
+import { LiveInterviewUI } from "@/components/candidate/interviews/LiveInterviewUI";
 
 function InterviewPageContent() {
   const searchParams = useSearchParams();
@@ -91,7 +91,7 @@ function InterviewPageContent() {
 
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      <LiveInterview interviewId={interviewId} />
+      <LiveInterviewUI interviewId={interviewId} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { InterviewReport } from "@/components/candidate/interviews/types";
-import { requestInterviewReport } from "@/components/candidate/interviews/utils/interviewApi";
+import { interviewsService } from "@/lib/services";
 import { CandidateReportView } from "@/components/interview/report/CandidateReportView";
 import { RecruiterReportView } from "@/components/interview/report/RecruiterReportView";
 
@@ -27,7 +27,7 @@ export default function InterviewReportPage() {
       try {
         setLoading(true);
         setError(null);
-        const { report: reportData, role } = await requestInterviewReport(interviewId);
+        const { report: reportData, role } = await interviewsService.requestInterviewReport(interviewId);
         setReport(reportData);
         setUserRole(role);
       } catch (err: any) {

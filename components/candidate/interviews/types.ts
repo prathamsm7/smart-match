@@ -26,7 +26,7 @@ export interface InterviewItem {
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "disconnected" | "error";
 
 export interface ChatMessage {
-  sender: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system";
   text: string;
   via: "audio" | "text";
   timestamp?: number;
