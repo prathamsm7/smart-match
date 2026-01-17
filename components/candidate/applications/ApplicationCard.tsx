@@ -35,7 +35,7 @@ export function ApplicationCard({ application, onWithdraw }: ApplicationCardProp
                             (interviewStatus === 'PENDING' || interviewStatus === 'IN_PROGRESS') &&
                             (application.status === 'INTERVIEW' || application.status === 'HIRED');
   const canViewReport = hasInterview && 
-                        (interviewStatus === 'COMPLETED' || application.interview?.completedAt !== null);
+                        (interviewStatus === 'COMPLETED');
 
   async function handleWithdraw() {
     if (!showConfirm) {

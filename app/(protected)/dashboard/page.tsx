@@ -11,6 +11,8 @@ import { ApplicationsView } from '@/components/candidate/ApplicationsView';
 import { JobsDashboard } from '@/components/recruiter/JobsDashboard';
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { InterviewsView } from '@/components/candidate/interviews/InterviewsView';
+import { ShortlistedCandidatesView } from '@/components/recruiter/ShortlistedCandidatesView';
+import { InterviewReportsView } from '@/components/recruiter/InterviewReportsView';
 
 export default function DashboardPage() {
   const supabase = createBrowserSupabase();
@@ -113,6 +115,10 @@ export default function DashboardPage() {
         return (
           <InterviewsView userId={user?.id || ""} />
         );
+      case 'shortlisted':
+        return <ShortlistedCandidatesView />;
+      case 'interview-reports':
+        return <InterviewReportsView />;
       case 'network':
         return (
           <div className="text-center py-12">

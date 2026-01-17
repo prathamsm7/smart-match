@@ -29,7 +29,6 @@ export function useLiveInterview(interviewId?: string) {
   const chatRef = useRef<ChatMessage[]>([]);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFinalizingRef = useRef(false);
-
   
   const isAIPlaying = isSpeaking;
   const chat = chatRef.current; // Use ref for chat, state only for triggering re-renders
@@ -90,7 +89,7 @@ export function useLiveInterview(interviewId?: string) {
   }, []);
 
   const router = useRouter();
-
+  
   const finalizeInterview = useCallback(async () => {
     if (!interviewId || isFinalizingRef.current) return;
     isFinalizingRef.current = true;
@@ -329,7 +328,7 @@ export function useLiveInterview(interviewId?: string) {
       firstMessageMode: "assistant-speaks-first-with-model-generated-message",
       transcriber: {
         provider: "deepgram",
-        model: "nova-3",
+        model: "nova-2",
       },
       voice: {
         provider: "vapi",

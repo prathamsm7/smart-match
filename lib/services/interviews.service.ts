@@ -1,132 +1,107 @@
-interface InterviewDataResult {
-    userData: any | null;
-    jobData: any | null;
-}
+/**
+ * Interviews Service
+ * Handles all interview-related API calls
+ */
 
 export const interviewsService = {
-    async updateInterviewStatus(interviewId: string, status: string) {
-        const response = await fetch(`/api/interview/${interviewId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status }),
-        });
+  /**
+   * Request an interview report
+   */
+  async requestInterviewReport(interviewId: string) {
+    const response = await fetch('/api/interview/report', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ interviewId }),
+    });
 
-        const data = await response.json();
+    const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error(data?.error || "Failed to update interview status");
-        }
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch interview report');
+    }
 
-        return data;
-    },
+    return {
+      report: data.report,
+      role: data.role,
+    };
+  },
 
-    async persistConversation(
-        interviewId: string,
-        chat: Array<{ role: string; text: string; via: string; timestamp?: number }>,
-        stage: "snapshot" | "final",
-    ): Promise<void> {
-        const response = await fetch("/api/interview/conversation", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                interviewId,
-                chat,
-                stage,
-            }),
-        });
+  /**
+   * Fetch all interviews for a user
+   */
+  async fetchInterviews(userId: string) {
+    const response = await fetch(`/api/interview?userId=${userId}`);
+    const data = await response.json();
 
-        if (!response.ok) {
-            const data = await response.json().catch(() => null);
-            throw new Error(data?.error || "Failed to persist conversation");
-        }
-    },
-    async fetchInterviewData(interviewId: string): Promise<InterviewDataResult> {
-        const response = await fetch(`/api/interview/${interviewId}`);
-        const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch interviews');
+    }
 
-        if (!response.ok) {
-            throw new Error(data?.error || "Failed to fetch interview data");
-        }
+    return data.interviews || [];
+  },
 
-        const interview = data.interview;
-        let userData: any | null = null;
-        let jobData: any | null = null;
+  /**
+   * Update interview status
+   */
+  async updateInterviewStatus(interviewId: string, status: string) {
+    const response = await fetch(`/api/interview/${interviewId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status }),
+    });
 
-        if (interview?.application?.snapshot) {
-            const snapshot = interview.application.snapshot as any;
-            userData = {
-                name: snapshot.applicantName || "Unknown",
-                email: snapshot.applicantEmail || "",
-                phone: snapshot.applicantPhone || "",
-                skills: snapshot.applicantSkills || [],
-                summary: snapshot.applicantSummary || "",
-                location: snapshot.applicantCity || "",
-                languages: snapshot.applicantLanguages || [],
-                experience: snapshot.applicantExperience || [],
-                totalExperienceYears: snapshot.applicantTotalExperienceYears || 0,
-                projects: snapshot.applicantProjects || [],
-                softSkills: snapshot.applicantSoftSkills || [],
-            };
-        } else if (interview?.application?.resumeId) {
-            try {
-                const resumeResponse = await fetch(
-                    `/api/resumes/${interview.application.resumeId}`,
-                );
-                if (resumeResponse.ok) {
-                    userData = await resumeResponse.json();
-                }
-            } catch (resumeError) {
-                console.error("Error fetching resume:", resumeError);
-            }
-        }
+    const data = await response.json();
 
-        if (interview?.application?.job) {
-            const job = interview.application.job;
-            jobData = {
-                title: job.title || "",
-                employerName: job.employerName || "",
-                description: job.description || "",
-                requirements: job.requirements || "",
-                responsibilities: job.responsibilities || "",
-                location: job.location || "",
-            };
-        }
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to update interview status');
+    }
 
-        return { userData, jobData };
-    },
+    return data.interview;
+  },
 
-    async requestInterviewReport(interviewId: string) {
-        const response = await fetch("/api/interview/report", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ interviewId }),
-        });
+  /**
+   * Fetch interview data (user and job details)
+   */
+  async fetchInterviewData(interviewId: string) {
+    const response = await fetch(`/api/interview/${interviewId}`);
+    const data = await response.json();
 
-        const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch interview data');
+    }
 
-        if (!response.ok) {
-            throw new Error(data?.error || "Report generation failed");
-        }
+    return {
+      userData: data.userData,
+      jobData: data.jobData,
+    };
+  },
 
-        const payload = data?.report;
-        const role = data?.role || "candidate";
+  /**
+   * Persist conversation to the backend
+   */
+  async persistConversation(interviewId: string, messages: any[], type: string) {
+    const response = await fetch('/api/interview/conversation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        interviewId,
+        messages,
+        type,
+      }),
+    });
 
-        if (!payload) {
-            throw new Error("Report payload is missing.");
-        }
+    const data = await response.json();
 
-        if (typeof payload === "string") {
-            try {
-                return { report: JSON.parse(payload), role };
-            } catch {
-                throw new Error("Received malformed report payload.");
-            }
-        }
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to persist conversation');
+    }
 
-        if (typeof payload === "object") {
-            return { report: payload, role };
-        }
-
-        throw new Error("Unexpected report payload format.");
-    },
+    return data;
+  },
 };

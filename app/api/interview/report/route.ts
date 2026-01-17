@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/superbase/server";
 import { prisma } from "@/lib/prisma";
 
-const REPORT_MODEL = "gemini-1.5-flash";
 const CHAT_KEY_PREFIX = "interview";
 const REPORT_KEY_PREFIX = "interview:report";
 const REPORT_CACHE_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
@@ -43,6 +42,12 @@ export async function POST(req: Request) {
     const interview = await prisma.interview.findUnique({
       where: { id: interviewId },
       include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
         application: {
           include: {
             job: true,
@@ -173,6 +178,14 @@ export async function POST(req: Request) {
         .map((msg) => `${msg.sender || "system"}: ${msg.text || ""}`)
         .join("\n");
 
+      // Extract candidate profile from application snapshot
+      const snapshot = interview.application.snapshot as any;
+      const candidateName = interview.user?.name || snapshot?.name || "Unknown";
+
+      const candidateProfile = `
+        Name: ${candidateName}
+      `.trim();
+
       const prompt = `
                 ROLE:
                 You are a strict, objective interview evaluator used for hiring decisions. You are also a technical interviewer and interview report generator.
@@ -184,7 +197,7 @@ export async function POST(req: Request) {
 
                 INPUTS:
                 - conversationTranscript: ${transcript}
-                - candidateProfileDetails: {"name":"Neha Kumari","experience":"0.5 years"}
+                - candidateProfileDetails: ${candidateProfile}
 
                 GLOBAL RULES:
                 - Output valid JSON only (no markdown, no explanations)

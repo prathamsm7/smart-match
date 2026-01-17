@@ -89,3 +89,6 @@ smart_resume/
 - `POST /api/resume/upload` - Upload a resume (file or text)
 - `GET /api/resume/[id]` - Get resume by ID
 - `GET /api/resume/[id]/matches` - Get job matches for a resume
+
+
+<!-- Job details extractor from given link -->

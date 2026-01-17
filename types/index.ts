@@ -93,3 +93,14 @@ export interface Resume {
     softSkills?: string[];
     totalExperienceYears: number;
 }
+
+// Interview types
+export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export interface ChatMessage {
+    role: 'user' | 'assistant';
+    text: string;
+    via: 'audio' | 'text';
+    timestamp?: number;
+    sender?: string;
+}
