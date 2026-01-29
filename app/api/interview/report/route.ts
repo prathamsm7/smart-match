@@ -1,7 +1,7 @@
 import { openaiClient } from "@/lib/clients";
 import redisClient from "@/lib/redisClient";
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/superbase/server";
+import { authenticateRequest } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const CHAT_KEY_PREFIX = "interview";
@@ -21,22 +21,15 @@ export async function POST(req: Request) {
     }
 
     // Get authenticated user and their role
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const { user: dbUser, error } = await authenticateRequest();
+    if (error) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 },
       );
     }
 
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-      select: { role: true,id:true },
-    });
-
-    const userRole = dbUser?.role || "candidate";
+    const userRole = dbUser.role || "candidate";
 
     // Verify interview exists and user has access (fetch once, reuse later)
     const interview = await prisma.interview.findUnique({

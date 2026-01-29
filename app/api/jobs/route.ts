@@ -1,45 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { storeJob, JobData } from '@/lib/agents';
 import { prisma } from '@/lib/prisma';
-import { createServerSupabase } from '@/lib/superbase/server';
+import { authenticateWithRole, authenticateRequest } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Get authenticated user
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // 1. Authenticate user and check role
+    const { user: dbUser, error } = await authenticateWithRole('recruiter');
+    if (error) return error;
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // 2. Find user in database
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
-
-    // 3. Check if user is a recruiter
-    if (dbUser.role !== 'recruiter') {
-      return NextResponse.json(
-        { error: 'Only recruiters can post jobs' },
-        { status: 403 }
-      );
-    }
-
-    // 4. Get job data from request
+    // 2. Get job data from request
     const jobData: JobData = await request.json();
 
-    // 5. Validate and normalize data - ensure requirements and responsibilities are strings
+    // 3. Validate and normalize data - ensure requirements and responsibilities are strings
     if (Array.isArray(jobData.requirements)) {
       jobData.requirements = jobData.requirements.join('\n');
     } else if (jobData.requirements && typeof jobData.requirements !== 'string') {
@@ -52,7 +25,7 @@ export async function POST(request: NextRequest) {
       jobData.responsibilities = String(jobData.responsibilities);
     }
 
-    // 6. Validate required fields
+    // 4. Validate required fields
     if (!jobData.title) {
       return NextResponse.json(
         { error: 'Job title is required' },
@@ -60,7 +33,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7. Store job in both PostgreSQL and Qdrant with postedBy
+    // 5. Store job in both PostgreSQL and Qdrant with postedBy
     const jobId = await storeJob({
       ...jobData,
       postedBy: dbUser.id,
@@ -91,26 +64,9 @@ export async function GET(request: NextRequest) {
     // If myJobs is true, require authentication
     let dbUser = null;
     if (myJobs) {
-      const supabase = await createServerSupabase();
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-      if (authError || !user) {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
-      }
-
-      dbUser = await prisma.user.findUnique({
-        where: { email: user.email! },
-      });
-
-      if (!dbUser) {
-        return NextResponse.json(
-          { error: 'User not found in database' },
-          { status: 404 }
-        );
-      }
+      const { user, error } = await authenticateRequest();
+      if (error) return error;
+      dbUser = user;
     }
 
     // Build where clause

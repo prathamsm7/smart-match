@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createServerSupabase } from '@/lib/superbase/server';
+import { authenticateWithRole } from '@/lib/auth';
 import { storeJob, JobData, embedText, generateEnhancedJobEmbeddingText } from '@/lib/agents';
 import { qdrantClient } from '@/lib/clients';
 
@@ -56,41 +56,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 1. Get authenticated user
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Authenticate user and check role
+    const { user: dbUser, error } = await authenticateWithRole('recruiter');
+    if (error) return error;
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // 2. Find user in database
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
-
-    // 3. Check if user is a recruiter
-    if (dbUser.role !== 'recruiter') {
-      return NextResponse.json(
-        { error: 'Only recruiters can update jobs' },
-        { status: 403 }
-      );
-    }
-
-    // 4. Get job ID
+    // Get job ID
     const { id } = await params;
 
-    // 5. Check if job exists and belongs to user
+    // Check if job exists and belongs to user
     const existingJob = await prisma.job.findUnique({
       where: { id },
     });
@@ -109,10 +82,10 @@ export async function PUT(
       );
     }
 
-    // 6. Get updated job data
+    // Get updated job data
     const jobData: JobData = await request.json();
 
-    // 6.5. Normalize data - ensure requirements and responsibilities are strings
+    // Normalize data - ensure requirements and responsibilities are strings
     if (Array.isArray(jobData.requirements)) {
       jobData.requirements = jobData.requirements.join('\n');
     } else if (jobData.requirements && typeof jobData.requirements !== 'string') {
@@ -125,7 +98,7 @@ export async function PUT(
       jobData.responsibilities = String(jobData.responsibilities);
     }
 
-    // 7. Update job in PostgreSQL
+    // Update job in PostgreSQL
     const updatedJob = await prisma.job.update({
       where: { id },
       data: {
@@ -141,7 +114,7 @@ export async function PUT(
       },
     });
 
-    // 8. Update vector in Qdrant (re-embed with new data using enhanced embedding)
+    // Update vector in Qdrant (re-embed with new data using enhanced embedding)
     const jobDataForEmbedding: JobData = {
       title: updatedJob.title,
       employerName: updatedJob.employerName || undefined,
@@ -195,41 +168,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 1. Get authenticated user
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Authenticate user and check role
+    const { user: dbUser, error } = await authenticateWithRole('recruiter');
+    if (error) return error;
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // 2. Find user in database
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
-
-    // 3. Check if user is a recruiter
-    if (dbUser.role !== 'recruiter') {
-      return NextResponse.json(
-        { error: 'Only recruiters can delete jobs' },
-        { status: 403 }
-      );
-    }
-
-    // 4. Get job ID
+    // Get job ID
     const { id } = await params;
 
-    // 5. Check if job exists and belongs to user
+    // Check if job exists and belongs to user
     const existingJob = await prisma.job.findUnique({
       where: { id },
     });
@@ -248,7 +194,7 @@ export async function DELETE(
       );
     }
 
-    // 6. Delete from Qdrant first
+    // Delete from Qdrant first
     try {
       await qdrantClient.delete('jobs', {
         points: [id],
@@ -258,7 +204,7 @@ export async function DELETE(
       // Continue with PostgreSQL deletion even if Qdrant deletion fails
     }
 
-    // 7. Delete from PostgreSQL
+    // Delete from PostgreSQL
     await prisma.job.delete({
       where: { id },
     });

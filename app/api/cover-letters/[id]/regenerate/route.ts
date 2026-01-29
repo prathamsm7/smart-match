@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createServerSupabase } from '@/lib/superbase/server';
+import { authenticateRequest } from '@/lib/auth';
 import redisClient from '@/lib/redisClient';
 import { qdrantClient } from '@/lib/clients';
 import { generateCoverLetter } from '@/lib/coverLetterHelper';
@@ -11,26 +11,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
+    // Authenticate user
+    const { user: dbUser, error } = await authenticateRequest();
+    if (error) return error;
 
     const { id } = await params;
     const { resumeId, jobTitle, company, description, requirements } = await request.json();

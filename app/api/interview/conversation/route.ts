@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import redisClient from "@/lib/redisClient";
 import { prisma } from "@/lib/prisma";
-import { createServerSupabase } from "@/lib/superbase/server";
 
 const TTL_SECONDS = 6 * 60 * 60; // 6 hours
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { interviewId, chat, stage } = body || {};
+    // Support both old (chat/stage) and new (messages/type) parameter names
+    const interviewId = body.interviewId;
+    const chat = body.chat || body.messages;
+    const stage = body.stage || body.type;
 
     if (!interviewId || !Array.isArray(chat)) {
+      console.error("Invalid request body:", { interviewId, chat: Array.isArray(chat), body });
       return NextResponse.json(
         { success: false, error: "Missing interviewId or chat transcript." },
         { status: 400 },
@@ -31,24 +34,13 @@ export async function POST(req: Request) {
     // If stage is "final", store in database and delete from Redis
     if (stage === "final") {
       // Verify user is authenticated
-      const supabase = await createServerSupabase();
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-      if (authError || !user) {
+      const { authenticateRequest } = await import("@/lib/auth");
+      const { user: dbUser, error } = await authenticateRequest();
+      
+      if (error) {
         return NextResponse.json(
           { success: false, error: "Unauthorized" },
           { status: 401 },
-        );
-      }
-
-      const dbUser = await prisma.user.findUnique({
-        where: { email: user.email! },
-      });
-
-      if (!dbUser) {
-        return NextResponse.json(
-          { success: false, error: "User not found" },
-          { status: 404 },
         );
       }
 

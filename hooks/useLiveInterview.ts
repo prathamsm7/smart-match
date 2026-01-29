@@ -46,12 +46,21 @@ export function useLiveInterview(interviewId?: string) {
       try {
         const data = await interviewsService.fetchInterviewData(interviewId);
         if (!isActive) return;
+        
+        console.log("Interview data loaded:", data);
+        
+        if (!data.userData || !data.jobData) {
+          console.error("Missing userData or jobData:", data);
+          setWarning("Interview data is incomplete. Please try again.");
+          return;
+        }
+        
         setUserData(data.userData);
         setJobData(data.jobData);
       } catch (error) {
         console.error("Error fetching interview data:", error);
         if (isActive) {
-          setWarning("Failed to load interview data");
+          setWarning("Failed to load interview data. Please refresh the page.");
         }
       } finally {
         if (isActive) {
@@ -219,8 +228,18 @@ export function useLiveInterview(interviewId?: string) {
   // ========================================================================
 
   const startVapiCall = useCallback(() => {
-    if (!vapiRef.current || !userData || !jobData) {
-      setWarning("Missing user or job data");
+    console.log("startVapiCall - userData:", userData);
+    console.log("startVapiCall - jobData:", jobData);
+    console.log("startVapiCall - vapiRef.current:", vapiRef.current);
+    
+    if (!vapiRef.current) {
+      setWarning("Voice assistant not initialized. Please refresh the page.");
+      return;
+    }
+    
+    if (!userData || !jobData) {
+      setWarning("Interview data not loaded yet. Please wait or refresh the page.");
+      console.error("Missing data - userData:", userData, "jobData:", jobData);
       return;
     }
     if (!VAPI_ASSISTANT_ID) {

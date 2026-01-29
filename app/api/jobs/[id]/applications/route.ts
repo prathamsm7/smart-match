@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createServerSupabase } from '@/lib/superbase/server';
+import { authenticateWithRole } from '@/lib/auth';
 
 // GET applications for a specific job
 export async function GET(
@@ -8,41 +8,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 1. Get authenticated user
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Authenticate user and check role
+    const { user: dbUser, error } = await authenticateWithRole('recruiter');
+    if (error) return error;
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // 2. Find user in database
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
-
-    // 3. Check if user is a recruiter
-    if (dbUser.role !== 'recruiter') {
-      return NextResponse.json(
-        { error: 'Only recruiters can view job applications' },
-        { status: 403 }
-      );
-    }
-
-    // 4. Get job ID
+    // Get job ID
     const { id } = await params;
 
-    // 5. Check if job exists and belongs to user
+    // Check if job exists and belongs to user
     const job = await prisma.job.findUnique({
       where: { id },
     });
@@ -61,7 +34,7 @@ export async function GET(
       );
     }
 
-    // 6. Fetch applications for this job (matchScore is pre-computed and stored!)
+    // Fetch applications for this job (matchScore is pre-computed and stored!)
     const applications = await prisma.jobApplication.findMany({
       where: { jobId: id },
       orderBy: { createdAt: 'desc' },
@@ -99,7 +72,7 @@ export async function GET(
       },
     });
 
-    // 7. Format applications - matchScore comes directly from DB (instant!)
+    // Format applications - matchScore comes directly from DB (instant!)
     const formattedApplications = applications.map((app: typeof applications[0]) => {
       const snapshot = app.snapshot as any || {};
       const resumeJson = app.resume?.json as any || {};

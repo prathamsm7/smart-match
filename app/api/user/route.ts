@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabase } from '@/lib/superbase/server';
+import { authenticateRequest } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Authenticate user
+    const { user: dbUser, error } = await authenticateRequest();
+    if (error) return error;
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
+    // Get full user details
+    const userDetails = await prisma.user.findUnique({
+      where: { id: dbUser.id },
       select: {
         id: true,
         email: true,
@@ -25,16 +20,9 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
-
     return NextResponse.json({
       success: true,
-      user: dbUser,
+      user: userDetails,
     });
   } catch (error: any) {
     console.error('Error fetching user:', error);

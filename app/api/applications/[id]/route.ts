@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createServerSupabase } from '@/lib/superbase/server';
+import { authenticateRequest } from '@/lib/auth';
 
 const ApplicationStatus = {
     SUBMITTED: 'SUBMITTED',
@@ -18,35 +18,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 1. Get authenticated user
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Authenticate user
+    const { user: dbUser, error } = await authenticateRequest();
+    if (error) return error;
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // 2. Find user in database
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
-
-    // 3. Get application ID and request body
+    // Get application ID and request body
     const { id } = await params;
     const body = await request.json();
     const { status, action } = body;
 
-    // 4. Get the application
+    // Get the application
     const application = await prisma.jobApplication.findUnique({
       where: { id },
       include: {
@@ -61,7 +42,7 @@ export async function PATCH(
       );
     }
 
-    // 5. Handle withdrawal (candidate action)
+    // Handle withdrawal (candidate action)
     if (action === 'withdraw') {
       if (application.userId !== dbUser.id) {
         return NextResponse.json(
@@ -85,7 +66,7 @@ export async function PATCH(
       });
     }
 
-    // 6. Handle status update (recruiter action)
+    // Handle status update (recruiter action)
     if (status) {
       // Check if user is recruiter
       if (dbUser.role !== 'recruiter') {

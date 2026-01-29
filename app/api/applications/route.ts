@@ -1,36 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/superbase/server";
+import { authenticateRequest } from "@/lib/auth";
 import redisClient from "@/lib/redisClient";
 import { qdrantClient } from "@/lib/clients";
 
 
 export async function POST(request: NextRequest) {
     try {
-        // 1. Get authenticated user
-        const supabase = await createServerSupabase();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        // 1. Authenticate user
+        const { user: dbUser, error } = await authenticateRequest();
+        if (error) return error;
 
-        if (authError || !user) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            );
-        }
-
-        // 2. Find user in database
-        const dbUser = await prisma.user.findUnique({
-            where: { email: user.email! },
-        });
-
-        if (!dbUser) {
-            return NextResponse.json(
-                { error: 'User not found in database' },
-                { status: 404 }
-            );
-        }
-
-        // 3. Get request body (matchScore is pre-computed from job search)
+        // 2. Get request body (matchScore is pre-computed from job search)
         const { jobId, resumeId, jobTitle, employerName, jobDescription, jobRequirements, matchScore, coverLetterId } = await request.json();
 
         if (!jobId || !resumeId) {
@@ -40,7 +21,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 4. Find Resume by vectorId
+        // 3. Find Resume by vectorId
         const resumeDbData = await prisma.resume.findFirst({
             where: {
                 vectorId: resumeId as string,
@@ -48,7 +29,7 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        // 5. Validate resume exists
+        // 4. Validate resume exists
         if (!resumeDbData) {
             return NextResponse.json(
                 { error: 'Resume not found or does not belong to user' },
@@ -56,7 +37,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 6. Get resume data (prefer database, fallback to cache/Qdrant)
+        // 5. Get resume data (prefer database, fallback to cache/Qdrant)
         let resumeData = resumeDbData.json;
 
         // Try Redis cache if database doesn't have it
@@ -91,7 +72,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 7. Ensure Job exists (create if it doesn't exist - lazy creation)
+        // 6. Ensure Job exists (create if it doesn't exist - lazy creation)
         let job = await prisma.job.findUnique({
             where: { id: jobId },
         });
@@ -117,7 +98,7 @@ export async function POST(request: NextRequest) {
             console.log(`✅ Created job ${jobId} in PostgreSQL (lazy creation)`);
         }
 
-        // 8. Verify cover letter exists and belongs to user if provided
+        // 7. Verify cover letter exists and belongs to user if provided
         if (coverLetterId) {
             const coverLetter = await prisma.coverLetter.findUnique({
                 where: { id: coverLetterId },
@@ -131,7 +112,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // 9. Create JobApplication with pre-computed match score
+        // 8. Create JobApplication with pre-computed match score
         const application = await prisma.jobApplication.create({
             data: {
                 userId: dbUser.id,           // Database user ID
@@ -156,7 +137,7 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        // 10. Update cover letter with application ID if cover letter was provided
+        // 9. Update cover letter with application ID if cover letter was provided
         if (coverLetterId) {
             await prisma.coverLetter.update({
                 where: { id: coverLetterId },
@@ -180,26 +161,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
     try {
-        const supabase = await createServerSupabase();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            );
-        }
-
-        const dbUser = await prisma.user.findUnique({
-            where: { email: user.email! },
-        });
-
-        if (!dbUser) {
-            return NextResponse.json(
-                { error: 'User not found' },
-                { status: 404 }
-            );
-        }
+        // Authenticate user
+        const { user: dbUser, error } = await authenticateRequest();
+        if (error) return error;
 
         const applications = await prisma.jobApplication.findMany({
             where: { userId: dbUser.id },

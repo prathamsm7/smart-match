@@ -91,8 +91,8 @@ export const interviewsService = {
       },
       body: JSON.stringify({
         interviewId,
-        messages,
-        type,
+        chat: messages,  // API expects 'chat', not 'messages'
+        stage: type,     // API expects 'stage', not 'type'
       }),
     });
 

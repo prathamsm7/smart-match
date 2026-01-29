@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createServerSupabase } from '@/lib/superbase/server';
+import { authenticateWithRole } from '@/lib/auth';
 
 /**
  * GET /api/recruiter/interview-reports
@@ -9,38 +9,11 @@ import { createServerSupabase } from '@/lib/superbase/server';
  */
 export async function GET(request: NextRequest) {
   try {
-    // 1. Get authenticated user
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Authenticate user and check role
+    const { user: dbUser, error } = await authenticateWithRole('recruiter');
+    if (error) return error;
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // 2. Find user in database and verify they're a recruiter
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-      select: { id: true, role: true },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
-
-    if (dbUser.role !== 'recruiter') {
-      return NextResponse.json(
-        { error: 'Only recruiters can access interview reports' },
-        { status: 403 }
-      );
-    }
-
-    // 3. Fetch all completed interviews for jobs posted by this recruiter
+    // Fetch all completed interviews for jobs posted by this recruiter
     const interviews = await prisma.interview.findMany({
       where: {
         status: 'COMPLETED',
@@ -79,7 +52,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // 4. Transform the data for frontend consumption
+    // Transform the data for frontend consumption
     const reports = interviews.map((interview: any) => {
       const report = interview.report as any;
       

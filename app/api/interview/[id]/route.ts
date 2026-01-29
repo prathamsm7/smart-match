@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createServerSupabase } from '@/lib/superbase/server';
+import { authenticateRequest } from '@/lib/auth';
 
 // GET - Get a specific interview
 export async function GET(
@@ -8,26 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
+    // Authenticate user
+    const { user: dbUser, error } = await authenticateRequest();
+    if (error) return error;
 
     const { id } = await params;
 
@@ -37,6 +20,19 @@ export async function GET(
         application: {
           include: {
             job: true,
+            resume: {
+              select: {
+                id: true,
+                json: true,
+              },
+            },
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
         },
       },
@@ -60,9 +56,36 @@ export async function GET(
       );
     }
 
+    // Extract user data from application snapshot or resume
+    const snapshot = interview.application.snapshot as any;
+    const resumeData = interview.application.resume?.json as any;
+
+    const userData = {
+      name: snapshot?.applicantName || interview.user.name || resumeData?.name || 'Unknown',
+      email: snapshot?.applicantEmail || interview.user.email || resumeData?.email || '',
+      skills: snapshot?.applicantSkills || resumeData?.skills || [],
+      experience: snapshot?.applicantExperience || resumeData?.experience || [],
+      projects: resumeData?.projects || [],
+      summary: snapshot?.applicantSummary || resumeData?.summary || '',
+      totalExperienceYears: snapshot?.applicantTotalExperienceYears || resumeData?.totalExperienceYears || 0,
+    };
+
+    const jobData = {
+      title: interview.application.job.title,
+      employerName: interview.application.job.employerName,
+      description: interview.application.job.description,
+      requirements: interview.application.job.requirements,
+      responsibilities: interview.application.job.responsibilities,
+      location: interview.application.job.location,
+      salary: interview.application.job.salary,
+      employmentType: interview.application.job.employmentType,
+    };
+
     return NextResponse.json({
       success: true,
       interview,
+      userData,
+      jobData,
     });
   } catch (error: any) {
     console.error('Error fetching interview:', error);
@@ -79,26 +102,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabase();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      );
-    }
+    // Authenticate user
+    const { user: dbUser, error } = await authenticateRequest();
+    if (error) return error;
 
     const { id } = await params;
     const body = await request.json();
