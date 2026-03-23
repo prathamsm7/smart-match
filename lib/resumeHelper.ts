@@ -1,3 +1,4 @@
+import "pdf-parse/worker";
 import { Agent, tool, run } from "@openai/agents";
 import { PDFParse, VerbosityLevel } from "pdf-parse";
 import resumeSchema from "./schema";
