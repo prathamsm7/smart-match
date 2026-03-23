@@ -59,7 +59,7 @@ export async function POST(
             if (!result || result.length === 0) {
                 return NextResponse.json({ error: "Resume not found" }, { status: 404 });
             }
-            resumeData = result[0].payload as Resume;
+            resumeData = result[0].payload as unknown as Resume;
         }
 
         // 3) Run ATS analysis (single LLM call) and post-process
