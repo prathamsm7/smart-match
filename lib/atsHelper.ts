@@ -1,5 +1,5 @@
 import { geminiClient, openaiClient } from "./clients";
-import type { ATSAnalysis, JobTargetedATSAnalysis, Resume } from "@/types";
+import type { ATSAnalysis, JobTargetedATSAnalysis, Resume, Job } from "@/types";
 import { 
     clampScore, 
     normalizeSection, 
@@ -227,7 +227,7 @@ export async function runATSAnalysis(resume: Resume): Promise<ATSAnalysis> {
     return buildFinalAnalysis(parsed);
 }
 
-export function buildJobTargetedPrompt(resume: Resume, job: any): string {
+export function buildJobTargetedPrompt(resume: Resume, job: Job): string {
     return `
             You are an expert ATS system and senior recruiter.
             Analyze the resume AGAINST THE JOB below and return STRICT JSON following the schema.
@@ -263,7 +263,7 @@ export function buildJobTargetedPrompt(resume: Resume, job: any): string {
         `;
 }
 
-export async function runJobTargetedATSAnalysis(resume: Resume, job: any): Promise<JobTargetedATSAnalysis> {
+export async function runJobTargetedATSAnalysis(resume: Resume, job: Job): Promise<JobTargetedATSAnalysis> {
     const prompt = buildJobTargetedPrompt(resume, job);
 
     const response = await openaiClient.chat.completions.create({
@@ -331,6 +331,6 @@ export async function extractResumeDataForATS(resumeText: string): Promise<Resum
     });
 
     const content = response.choices[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(content) as Resume;
+    const parsed = JSON.parse(content) as unknown as Resume;
     return parsed;
 }

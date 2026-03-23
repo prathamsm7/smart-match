@@ -566,7 +566,6 @@ export function ATSCheckerView() {
             <ATSScoreHero
               overallScore={overallScore}
               potentialNum={potentialNum}
-              targetScore={targetScore}
               sections={sections}
               sectionKeys={sectionKeys}
               sectionDisplay={sectionDisplay}

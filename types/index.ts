@@ -7,8 +7,8 @@ export interface Job {
     salary: string | null;
     employmentType: string | null;
     applyLink: string | null;
-    requirements: any;
-    responsibilities: any;
+    requirements: string | null;
+    responsibilities: string | null;
     createdAt: string;
     _count: {
         applications: number;

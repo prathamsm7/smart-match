@@ -14,7 +14,7 @@ interface CoverLetterSectionProps {
   jobTitle: string;
   company: string;
   description: string;
-  requirements?: any;
+  requirements?: string | null;
   onCoverLetterGenerated: (coverLetterId: string, finalText: string) => void;
 }
 
