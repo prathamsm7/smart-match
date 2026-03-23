@@ -19,7 +19,7 @@ import {
 import { getUserInitials, getUserDisplayName, getUserTitle } from './utils/userHelpers';
 import { useRouter } from "next/navigation";
 
-export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings' | 'jobs' | 'test' | 'shortlisted' | 'interview-reports';
+export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'ats-checker' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings' | 'jobs' | 'test' | 'shortlisted' | 'interview-reports';
 
 interface DashboardSidebarProps {
   user: any;
@@ -49,6 +49,7 @@ export function DashboardSidebar({
   const candidateItems = [
     { icon: <BarChart3 className="w-5 h-5" />, label: "Dashboard", view: 'overview' as DashboardView, badge: null },
     { icon: <Briefcase className="w-5 h-5" />, label: "Job Matches", view: 'job-matches' as DashboardView, badge: null },
+    { icon: <FileText className="w-5 h-5" />, label: "ATS Checker", view: 'ats-checker' as DashboardView, badge: null },
     { icon: <FileText className="w-5 h-5" />, label: "My Resumes", view: 'resumes' as DashboardView, badge: null },
     { icon: <Briefcase className="w-5 h-5" />, label: "Applications", view: 'applications' as DashboardView, badge: null },
     { icon: <Calendar className="w-5 h-5" />, label: "Interviews", view: 'interviews' as DashboardView, badge: null },

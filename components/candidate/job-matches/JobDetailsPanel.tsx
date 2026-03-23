@@ -150,6 +150,7 @@ export function JobDetailsPanel({
               <span>Save</span>
             </button>
           </div>
+
         </div>
 
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-8 border border-white/10 backdrop-blur-sm">

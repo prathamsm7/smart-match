@@ -7,6 +7,7 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { DashboardSidebar, type DashboardView } from '@/components/dashboard/DashboardSidebar';
 import { ResumesView } from '@/components/candidate/ResumesView';
 import { JobMatchesView } from '@/components/candidate/JobMatchesView';
+import { ATSCheckerView } from '@/components/candidate/ATSCheckerView';
 import { ApplicationsView } from '@/components/candidate/ApplicationsView';
 import { JobsDashboard } from '@/components/recruiter/JobsDashboard';
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
@@ -102,6 +103,8 @@ export default function DashboardPage() {
         );
       case 'job-matches':
         return <JobMatchesView userId={user?.id || ""} />;
+      case 'ats-checker':
+        return <ATSCheckerView />;
       case 'applications':
         return (
           <ApplicationsView userId={user?.id || ""} />

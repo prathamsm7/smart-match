@@ -22,9 +22,10 @@ interface ResumeCardProps {
 }
 
 export function ResumeCard({ resume, onSetPrimary, settingPrimaryId }: ResumeCardProps) {
-  const matchScore = resume.matchScore || 0;
+  const displayScore = resume.matchScore || 0;
+
   const matchColor =
-    matchScore >= 90 ? "text-green-400" : matchScore >= 80 ? "text-yellow-400" : "text-orange-400";
+    displayScore >= 90 ? "text-green-400" : displayScore >= 80 ? "text-yellow-400" : "text-orange-400";
 
   return (
     <div
@@ -63,7 +64,7 @@ export function ResumeCard({ resume, onSetPrimary, settingPrimaryId }: ResumeCar
               </div>
             </div>
             <div className="text-center ml-4">
-              <div className={`text-3xl font-bold ${matchColor}`}>{matchScore}%</div>
+              <div className={`text-3xl font-bold ${matchColor}`}>{displayScore}%</div>
               <span className="text-xs text-gray-400">Avg Match</span>
             </div>
           </div>

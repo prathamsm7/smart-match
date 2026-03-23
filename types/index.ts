@@ -92,6 +92,7 @@ export interface Resume {
     languages: string[];
     softSkills?: string[];
     totalExperienceYears: number;
+    preferredJob: string;
 }
 
 // Interview types
@@ -103,4 +104,43 @@ export interface ChatMessage {
     via: 'audio' | 'text';
     timestamp?: number;
     sender?: string;
+}
+
+export interface SectionAnalysis {
+    score: number;
+    issues: string[];
+    fixes: string[];
+    examples: string[];
+    improvements: Array<{
+        original: string;
+        improved: string;
+    }>;
+    tips: string[];
+    goodThings: string[];
+}
+
+export interface ATSAnalysis {
+    overallScore: number;
+    improvementPotential: string;
+    priorityFixes: Array<{
+        text: string;
+        impact: 'high' | 'medium';
+    }>;
+    sections: {
+        summary: SectionAnalysis;
+        skills: SectionAnalysis;
+        experience: SectionAnalysis;
+        projects: SectionAnalysis;
+        structure: SectionAnalysis;
+    };
+    globalTips: string[];
+}
+
+export interface JobTargetedATSAnalysis extends ATSAnalysis {
+    keywordAnalysis: {
+        matched: string[];
+        missing: string[];
+        matchPercentage: number;
+    };
+    tailoredSuggestions: string[];
 }

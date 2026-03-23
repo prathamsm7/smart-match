@@ -204,7 +204,48 @@ export function useLiveInterview(interviewId?: string) {
         // Trigger re-render
         setChatUpdateTrigger(prev => prev + 1);
       }
+
+      message.toolCallList.forEach((toolCall) => {
+        const functionName = toolCall.function?.name;
+        let params = {};
+        
+        try {
+          const args = toolCall.function?.arguments;
+          params = typeof args === 'string' ? JSON.parse(args) : args || {};
+        } catch (err) {
+          console.error('Failed to parse tool arguments:', err);
+          return;
+        }
+        
+        console.log('Tool called:', functionName, params);
+        
+        if (functionName === 'requestEndInterview') {
+          console.info('requesting-end');
+          console.log('User requested to end interview:', params.reason);
+          
+          // The assistant should automatically ask for confirmation after this tool
+          
+        } else if (functionName === 'handleConfirmation') {
+          const { confirmed, userResponse } = params;
+          console.log('Confirmation response:', confirmed, userResponse);
+          
+          if (confirmed) {
+            console.info('confirmed: true');
+            // Tell the assistant to use endCall tool
+            vapiInstance.addMessage({
+              role: 'system',
+              content: 'User confirmed ending the interview. Now use the endCall tool to end the session.'
+            });
+          } else {
+            console.info('confirmed: false');
+            console.log('User declined to end interview, continuing...');
+            // The assistant should continue normally
+          }
+        }
+      });
     });
+
+    
 
     vapiInstance.on("error", (error: any) => {
       console.error("Vapi error:", error);
@@ -339,9 +380,67 @@ export function useLiveInterview(interviewId?: string) {
               - Introducing yourself as Despina
               - Mentioning the job role and company name
               - Asking the candidate to introduce themselves
+
+              END INTERVIEW LOGIC:
+              1. When user asks to end interview, use "requestEndInterview" tool
+              2. After using that tool, ask: "Are you sure you want to end the interview? Please say yes to confirm or no to continue."
+              3. Based on their response, use "handleConfirmation" tool:
+                - If they say yes/sure/okay/confirm → confirmed: true
+                - If they say no/wait/continue → confirmed: false
+              4. If handleConfirmation returns confirmed: true, then use the "endCall" tool to actually end the interview
+              5. If handleConfirmation returns confirmed: false, continue with the interview normally
+              6. Do not end the interview without going through this confirmation process.
             `,
           },
         ],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'requestEndInterview',
+              description: 'Called when user first requests to end the interview',
+              parameters: {
+                type: 'object',
+                properties: {
+                  reason: {
+                    type: 'string',
+                    description: 'User reason for wanting to end'
+                  }
+                }
+              }
+            }
+          },
+          {
+            type: 'function',
+            function: {
+              name: 'handleConfirmation',
+              description: 'Called after asking for confirmation to process the user response',
+              parameters: {
+                type: 'object',
+                properties: {
+                  confirmed: {
+                    type: 'boolean',
+                    description: 'True if user confirmed ending, false if they want to continue'
+                  },
+                  userResponse: {
+                    type: 'string',
+                    description: 'Exact user response to confirmation question'
+                  }
+                },
+                required: ['confirmed']
+              }
+            }
+          },
+          {
+            type: 'endCall',
+            messages: [
+              {
+                type: 'request-start',
+                content: 'Thank you for your time. The interview is now ending. Goodbye!'
+              }
+            ]
+          }
+        ]
       },
       firstMessage: `Hello ${user.name || "there"}! I'm your AI interviewer for the ${job.title || "position"} at ${job.employerName || "the company"}. Let's begin!`,
       firstMessageMode: "assistant-speaks-first-with-model-generated-message",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import redisClient from '@/lib/redisClient';
 
 /**
  * GET /api/resumes
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Transform resumes to include computed fields
-    const transformedResumes = resumes.map((resume: any) => {
+    const transformedResumes = await Promise.all(resumes.map(async (resume: any) => {
       const resumeJson = resume.json as any;
       
       // Extract name from resume JSON or generate a default
@@ -69,6 +70,20 @@ export async function GET(request: NextRequest) {
       // Estimate file size (placeholder - would need actual file size in production)
       const fileSize = "245 KB"; // This would come from actual file storage
 
+      // Try cached ATS score if available
+      let atsScore: number | undefined;
+      try {
+        const atsCache = await redisClient.get(`ats:general:${resume.id}`);
+        if (atsCache) {
+          const parsed = typeof atsCache === 'string' ? JSON.parse(atsCache) : atsCache;
+          if (parsed?.overallScore !== undefined) {
+            atsScore = Math.round(parsed.overallScore);
+          }
+        }
+      } catch (err) {
+        console.warn('ATS cache read failed for resume', resume.id, err);
+      }
+
       return {
         id: resume.id,
         userId: resume.userId,
@@ -85,9 +100,9 @@ export async function GET(request: NextRequest) {
         downloads: 0, // TODO: Add downloads tracking
         applications: resume.applications.length,
         tags: tags,
-        matchScore: 85, // TODO: Calculate from actual job matches
+        matchScore: atsScore ?? 0,
       };
-    });
+    }));
 
     return NextResponse.json({
       success: true,
