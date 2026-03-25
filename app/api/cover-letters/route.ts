@@ -4,6 +4,7 @@ import { authenticateRequest } from '@/lib/auth';
 import redisClient from '@/lib/redisClient';
 import { qdrantClient } from '@/lib/clients';
 import { generateCoverLetter } from '@/lib/coverLetterHelper';
+import { checkUsageLimit, incrementUsage } from '@/lib/usageHelper';
 
 // GET - Fetch existing cover letter by jobId
 export async function GET(request: NextRequest) {
@@ -68,6 +69,17 @@ export async function POST(request: NextRequest) {
     // Authenticate user
     const { user: dbUser, error } = await authenticateRequest();
     if (error) return error;
+
+    // Check usage limit
+    const { allowed, limit, used } = await checkUsageLimit(dbUser.id, 'cover_letter');
+    if (!allowed) {
+      return NextResponse.json({ 
+        error: "Monthly cover letter limit reached", 
+        limit, 
+        used,
+        upgradeRequired: true 
+      }, { status: 403 });
+    }
 
     // Get request body
     const { resumeId, jobId, jobTitle, company, description, requirements } = await request.json();
@@ -153,6 +165,9 @@ export async function POST(request: NextRequest) {
         regenerationCount: 0,
       },
     });
+
+    // 8. Increment usage
+    await incrementUsage(dbUser.id, 'cover_letter');
 
     return NextResponse.json({
       success: true,

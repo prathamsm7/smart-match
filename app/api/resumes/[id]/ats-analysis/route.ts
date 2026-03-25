@@ -3,8 +3,11 @@ import redisClient from "@/lib/redisClient";
 import { qdrantClient } from "@/lib/clients";
 import { runATSAnalysis } from "@/lib/atsHelper";
 import type { Resume } from "@/types";
+import { authenticateRequest } from "@/lib/auth";
+import { checkUsageLimit, incrementUsage } from "@/lib/usageHelper";
 
-const CACHE_TTL_SECONDS = 24 * 60 * 60; // 24h
+
+
 
 export async function POST(
     _request: NextRequest,
@@ -17,14 +20,29 @@ export async function POST(
             return NextResponse.json({ error: "Resume ID is required" }, { status: 400 });
         }
 
-        // Basic rate limit: 5 analyses per resume per hour
+        // Authenticate user
+        const { user: dbUser, error } = await authenticateRequest();
+        if (error) return error;
+
+        // Check usage limit
+        const { allowed, limit, used } = await checkUsageLimit(dbUser.id, 'ats_analysis');
+        if (!allowed) {
+            return NextResponse.json({ 
+                error: "Monthly ATS analysis limit reached", 
+                limit, 
+                used,
+                upgradeRequired: true 
+            }, { status: 403 });
+        }
+
+        // Basic rate limit: 5 analyses per resume per hour (as a secondary guard)
         const rateKey = `ats:rate:${resumeId}`;
         const current = await redisClient.incr(rateKey);
         if (current === 1) {
             await redisClient.expire(rateKey, 60 * 60); // 1h
         }
         if (current > 5) {
-            return NextResponse.json({ error: "Too many ATS analyses. Please try again in a bit." }, { status: 429 });
+            return NextResponse.json({ error: "Too many ATS analyses for this resume. Please try again in a bit." }, { status: 429 });
         }
 
         // 1) Check cached ATS analysis
@@ -65,8 +83,8 @@ export async function POST(
         // 3) Run ATS analysis (single LLM call) and post-process
         const analysis = await runATSAnalysis(resumeData);
 
-        // 4) Cache the result for 24h
-        await redisClient.set(cacheKey, JSON.stringify(analysis), { ex: CACHE_TTL_SECONDS });
+        // 5) Increment usage (only if we actually ran the analysis, though you could argue for charging on cache hit too)
+        await incrementUsage(dbUser.id, 'ats_analysis');
 
         return NextResponse.json(analysis);
     } catch (error: any) {

@@ -14,6 +14,7 @@ import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { InterviewsView } from '@/components/candidate/interviews/InterviewsView';
 import { ShortlistedCandidatesView } from '@/components/recruiter/ShortlistedCandidatesView';
 import { InterviewReportsView } from '@/components/recruiter/InterviewReportsView';
+import { BillingView } from '@/components/billing/BillingView';
 
 export default function DashboardPage() {
   const supabase = createBrowserSupabase();
@@ -146,6 +147,8 @@ export default function DashboardPage() {
             <p className="text-gray-400">Settings view coming soon...</p>
           </div>
         );
+      case 'billing':
+        return <BillingView />;
       default:
         return null;
     }

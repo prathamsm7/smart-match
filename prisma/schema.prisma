@@ -14,16 +14,21 @@ datasource db {
 }
 
 model User {
-  id           String           @id @default(uuid())
-  email        String           @unique
-  name         String?
-  role         String           @default("candidate") // "candidate" or "recruiter"
-  resumes      Resume[]
-  applications JobApplication[]
-  postedJobs   Job[]            @relation("JobPoster")
-  coverLetters CoverLetter[]
-  interviews   Interview[]
-  createdAt    DateTime         @default(now())
+  id               String           @id @default(uuid())
+  email            String           @unique
+  name             String?
+  role             String           @default("candidate") // "candidate" or "recruiter"
+  stripeCustomerId String?          @unique
+  planId           String?          // FK to Plan (null = free tier)
+  resumes          Resume[]
+  applications     JobApplication[]
+  postedJobs       Job[]            @relation("JobPoster")
+  coverLetters     CoverLetter[]
+  interviews       Interview[]
+  subscription     Subscription?
+  usageRecords     UsageRecord[]
+  plan             Plan?            @relation(fields: [planId], references: [id])
+  createdAt        DateTime         @default(now())
 }
 
 model Resume {
@@ -142,4 +147,49 @@ enum InterviewStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+model Plan {
+  id            String         @id @default(uuid())
+  name          String         @unique // "free", "pro"
+  displayName   String         // "Free", "Pro"
+  type          String         // "free", "paid"
+  price         Int            @default(0) // price in cents ($9 = 900)
+  interval      String         @default("month") // "month" or "year"
+  stripePriceId String?        @unique // Stripe price ID for paid plans
+  features      Json           // { ats_analysis: 10, job_match: 15, ... }
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+
+  users         User[]
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  planId               String
+  stripeSubscriptionId String   @unique
+  status               String   // "active", "canceled", "past_due", "trialing"
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+}
+
+model UsageRecord {
+  id          String   @id @default(uuid())
+  userId      String
+  feature     String   // "ats_analysis", "job_match", "interview", "application", "resume_upload"
+  periodStart DateTime // 1st of billing month
+  count       Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, feature, periodStart])
+  @@index([userId, feature])
 }

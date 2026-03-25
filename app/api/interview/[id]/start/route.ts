@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
+import { checkUsageLimit, incrementUsage } from '@/lib/usageHelper';
 
 // POST - Start an interview with validation
 export async function POST(
@@ -11,6 +12,17 @@ export async function POST(
     // Authenticate user
     const { user: dbUser, error } = await authenticateRequest();
     if (error) return error;
+
+    // Check usage limit
+    const { allowed, limit, used } = await checkUsageLimit(dbUser.id, 'interview');
+    if (!allowed) {
+      return NextResponse.json({ 
+        error: "Monthly AI interview limit reached", 
+        limit, 
+        used,
+        upgradeRequired: true 
+      }, { status: 403 });
+    }
 
     const { id } = await params;
 
@@ -64,6 +76,9 @@ export async function POST(
         startedAt: new Date(),
       },
     });
+
+    // Increment usage
+    await incrementUsage(dbUser.id, 'interview');
 
     return NextResponse.json({
       success: true,

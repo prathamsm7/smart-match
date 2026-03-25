@@ -15,11 +15,12 @@ import {
   ClipboardList,
   UserCheck,
   FileCheck,
+  CreditCard,
 } from 'lucide-react';
 import { getUserInitials, getUserDisplayName, getUserTitle } from './utils/userHelpers';
 import { useRouter } from "next/navigation";
 
-export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'ats-checker' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings' | 'jobs' | 'test' | 'shortlisted' | 'interview-reports';
+export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'ats-checker' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings' | 'jobs' | 'test' | 'shortlisted' | 'interview-reports' | 'billing';
 
 interface DashboardSidebarProps {
   user: any;
@@ -56,6 +57,7 @@ export function DashboardSidebar({
     { icon: <Users className="w-5 h-5" />, label: "Network", view: 'network' as DashboardView, badge: null },
     { icon: <User className="w-5 h-5" />, label: "Profile", view: 'profile' as DashboardView, badge: null },
     { icon: <Bell className="w-5 h-5" />, label: "Notifications", view: 'notifications' as DashboardView, badge: null },
+    { icon: <CreditCard className="w-5 h-5" />, label: "Billing", view: 'billing' as DashboardView, badge: null },
     { icon: <Settings className="w-5 h-5" />, label: "Settings", view: 'settings' as DashboardView, badge: null },
   ];
 
@@ -68,6 +70,7 @@ export function DashboardSidebar({
     { icon: <Users className="w-5 h-5" />, label: "Candidates", view: 'network' as DashboardView, badge: null },
     { icon: <User className="w-5 h-5" />, label: "Profile", view: 'profile' as DashboardView, badge: null },
     { icon: <Bell className="w-5 h-5" />, label: "Notifications", view: 'notifications' as DashboardView, badge: null },
+    { icon: <CreditCard className="w-5 h-5" />, label: "Billing", view: 'billing' as DashboardView, badge: null },
     { icon: <Settings className="w-5 h-5" />, label: "Settings", view: 'settings' as DashboardView, badge: null },
   ];
 

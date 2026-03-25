@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/auth";
 import redisClient from "@/lib/redisClient";
 import { qdrantClient } from "@/lib/clients";
-
+import { checkUsageLimit, incrementUsage } from "@/lib/usageHelper";
 
 export async function POST(request: NextRequest) {
     try {
@@ -11,7 +11,18 @@ export async function POST(request: NextRequest) {
         const { user: dbUser, error } = await authenticateRequest();
         if (error) return error;
 
-        // 2. Get request body (matchScore is pre-computed from job search)
+        // 2. Check usage limit
+        const { allowed, limit, used } = await checkUsageLimit(dbUser.id, 'application');
+        if (!allowed) {
+            return NextResponse.json({ 
+                error: "Monthly application limit reached", 
+                limit, 
+                used,
+                upgradeRequired: true 
+            }, { status: 403 });
+        }
+
+        // 3. Get request body (matchScore is pre-computed from job search)
         const { jobId, resumeId, jobTitle, employerName, jobDescription, jobRequirements, matchScore, coverLetterId } = await request.json();
 
         if (!jobId || !resumeId) {
@@ -145,6 +156,9 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        // 10. Increment usage
+        await incrementUsage(dbUser.id, 'application');
+
         return NextResponse.json({
             success: true,
             application: application
@@ -159,7 +173,7 @@ export async function POST(request: NextRequest) {
     }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
     try {
         // Authenticate user
         const { user: dbUser, error } = await authenticateRequest();

@@ -4,10 +4,27 @@ import redisClient from "@/lib/redisClient";
 import { extractTextFromPDFBuffer } from "@/lib/resumeHelper";
 import { extractResumeDataForATS, runATSAnalysis } from "@/lib/atsHelper";
 
+import { authenticateRequest } from "@/lib/auth";
+import { checkUsageLimit, incrementUsage } from "@/lib/usageHelper";
+
 const DRAFT_TTL_SECONDS = 24 * 60 * 60; // 24h
 
 export async function POST(request: NextRequest) {
     try {
+        // Authenticate user
+        const { user: dbUser, error } = await authenticateRequest();
+        if (error) return error;
+
+        // Check usage limit
+        const { allowed, limit, used } = await checkUsageLimit(dbUser.id, 'ats_analysis');
+        if (!allowed) {
+            return NextResponse.json({ 
+                error: "Monthly ATS analysis limit reached", 
+                limit, 
+                used,
+                upgradeRequired: true 
+            }, { status: 403 });
+        }
         const formData = await request.formData();
         const file = formData.get("file") as File | null;
         const resumeTextInput = formData.get("resumeText") as string | null;
@@ -33,6 +50,9 @@ export async function POST(request: NextRequest) {
             JSON.stringify({ resumeText, resumeData, analysis, fileName }),
             { ex: DRAFT_TTL_SECONDS }
         );
+
+        // Increment usage
+        await incrementUsage(dbUser.id, 'ats_analysis');
 
         return NextResponse.json({ draftId, analysis, resumeData, fileName });
     } catch (error: any) {

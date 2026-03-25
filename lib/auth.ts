@@ -8,6 +8,7 @@ export interface AuthenticatedUser {
   email: string;
   name: string | null;
   role: string;
+  stripeCustomerId: string | null;
   createdAt: Date;
 }
 

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchJobsForResume } from '@/lib/jobHelper';
 import redisClient from '@/lib/redisClient';
+import { authenticateRequest } from '@/lib/auth';
+import { checkUsageLimit, incrementUsage } from '@/lib/usageHelper';
 
 export async function GET(
     request: NextRequest,
@@ -14,6 +16,21 @@ export async function GET(
                 { error: 'Resume ID is required' },
                 { status: 400 }
             );
+        }
+
+        // Authenticate user
+        const { user: dbUser, error } = await authenticateRequest();
+        if (error) return error;
+
+        // Check usage limit
+        const { allowed, limit, used } = await checkUsageLimit(dbUser.id, 'job_match');
+        if (!allowed) {
+            return NextResponse.json({ 
+                error: "Monthly job match limit reached", 
+                limit, 
+                used,
+                upgradeRequired: true 
+            }, { status: 403 });
         }
 
         // Check cache first
@@ -34,6 +51,9 @@ export async function GET(
 
         // Cache results for 5 minutes
         await redisClient.set(cachedKey, JSON.stringify(matches), { ex: 300 });
+
+        // 3) Increment usage (only on cache miss when we actually perform the search)
+        await incrementUsage(dbUser.id, 'job_match');
 
         return NextResponse.json({
             success: true,
