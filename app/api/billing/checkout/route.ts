@@ -21,14 +21,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get Pro plan
-        const proPlan = await prisma.plan.findUnique({
-            where: { name: 'pro' },
+        const body = await request.json().catch(() => ({}));
+        const requestedPlanName = body.planName || (user.role === 'recruiter' ? 'growth_recruiter' : 'pro');
+
+        // Get requested plan
+        const targetPlan = await prisma.plan.findUnique({
+            where: { name: requestedPlanName },
         });
 
-        if (!proPlan) {
+        if (!targetPlan) {
             return NextResponse.json(
-                { error: 'Pro plan not found. Please run the seed script.' },
+                { error: `Plan '${requestedPlanName}' not found. Please run the seed script.` },
                 { status: 500 }
             );
         }
@@ -59,14 +62,14 @@ export async function POST(request: NextRequest) {
             cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin')}/dashboard?billing=cancelled`,
             metadata: {
                 userId: user.id,
-                planId: proPlan.id,
+                planId: targetPlan.id,
             },
         };
 
-        if (proPlan.stripePriceId) {
+        if (targetPlan.stripePriceId) {
             (sessionParams as Record<string, unknown>).line_items = [
                 {
-                    price: proPlan.stripePriceId,
+                    price: targetPlan.stripePriceId,
                     quantity: 1,
                 },
             ];
@@ -78,11 +81,11 @@ export async function POST(request: NextRequest) {
                         currency: 'usd',
                         product_data: {
                             name: 'Smart Resume Pro',
-                            description: 'Unlimited ATS analysis, job matches, cover letters, and more.',
+                            description: 'Advanced features based on your selected plan.',
                         },
-                        unit_amount: proPlan.price, // in cents
+                        unit_amount: targetPlan.price, // in cents
                         recurring: {
-                            interval: proPlan.interval as 'month' | 'year',
+                            interval: targetPlan.interval as 'month' | 'year',
                         },
                     },
                     quantity: 1,

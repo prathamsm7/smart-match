@@ -22,18 +22,20 @@ interface UsageInfo {
 }
 
 interface SubscriptionState {
+    role: string;
     plan: PlanInfo;
     subscription: SubscriptionInfo | null;
     usage: Record<string, UsageInfo>;
     loading: boolean;
     error: string | null;
     refetch: () => Promise<void>;
-    upgrade: () => Promise<void>;
+    upgrade: (planName?: string) => Promise<void>;
     manageSubscription: () => Promise<void>;
     upgrading: boolean;
 }
 
 export function useSubscription(): SubscriptionState {
+    const [role, setRole] = useState<string>('candidate');
     const [plan, setPlan] = useState<PlanInfo>({
         name: 'free',
         displayName: 'Free',
@@ -53,6 +55,7 @@ export function useSubscription(): SubscriptionState {
             const res = await fetch('/api/billing/status');
             if (!res.ok) throw new Error('Failed to fetch billing status');
             const data = await res.json();
+            if (data.role) setRole(data.role);
             setPlan(data.plan);
             setSubscription(data.subscription);
             setUsage(data.usage);
@@ -67,10 +70,14 @@ export function useSubscription(): SubscriptionState {
         fetchStatus();
     }, [fetchStatus]);
 
-    const upgrade = useCallback(async () => {
+    const upgrade = useCallback(async (planName?: string) => {
         try {
             setUpgrading(true);
-            const res = await fetch('/api/billing/checkout', { method: 'POST' });
+            const res = await fetch('/api/billing/checkout', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ planName })
+            });
             const data = await res.json();
             if (data.url) {
                 window.location.href = data.url;
@@ -99,6 +106,7 @@ export function useSubscription(): SubscriptionState {
     }, []);
 
     return {
+        role,
         plan,
         subscription,
         usage,

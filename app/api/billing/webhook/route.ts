@@ -159,8 +159,16 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 
     if (!existingSubscription) return;
 
+    const user = await prisma.user.findUnique({
+        where: { id: existingSubscription.userId }
+    });
+
+    if (!user) return;
+
+    const fallbackPlanName = user.role === 'recruiter' ? 'free_recruiter' : 'free';
+
     // Get free plan
-    const freePlan = await prisma.plan.findUnique({ where: { name: 'free' } });
+    const freePlan = await prisma.plan.findUnique({ where: { name: fallbackPlanName } });
 
     // Downgrade user to free plan
     await prisma.user.update({
@@ -174,7 +182,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
         data: { status: 'canceled' },
     });
 
-    console.log(`✅ Subscription deleted, user ${existingSubscription.userId} downgraded to free`);
+    console.log(`✅ Subscription deleted, user ${existingSubscription.userId} downgraded to ${fallbackPlanName}`);
 }
 
 // ─── Payment failed → mark as past_due ──────────────────

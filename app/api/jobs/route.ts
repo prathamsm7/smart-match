@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { storeJob, JobData } from '@/lib/agents';
 import { prisma } from '@/lib/prisma';
 import { authenticateWithRole, authenticateRequest } from '@/lib/auth';
+import { checkUsageLimit, incrementUsage } from '@/lib/usageHelper';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,7 +10,16 @@ export async function POST(request: NextRequest) {
     const { user: dbUser, error } = await authenticateWithRole('recruiter');
     if (error) return error;
 
-    // 2. Get job data from request
+    // 2. Check billing usage limit
+    const usage = await checkUsageLimit(dbUser.id, 'job_posting');
+    if (!usage.allowed) {
+      return NextResponse.json(
+        { error: 'Job posting limit reached. Please upgrade your plan.', usage },
+        { status: 403 }
+      );
+    }
+
+    // 3. Get job data from request
     const jobData: JobData = await request.json();
 
     // 3. Validate and normalize data - ensure requirements and responsibilities are strings
@@ -39,15 +49,19 @@ export async function POST(request: NextRequest) {
       postedBy: dbUser.id,
     });
 
+    // 6. Increment usage after successful posting
+    await incrementUsage(dbUser.id, 'job_posting');
+
     return NextResponse.json({
       success: true,
       jobId,
       message: 'Job stored successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error storing job:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: message },
       { status: 500 }
     );
   }
@@ -102,10 +116,11 @@ export async function GET(request: NextRequest) {
       limit,
       offset,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching jobs:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: message },
       { status: 500 }
     );
   }

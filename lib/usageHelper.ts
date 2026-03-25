@@ -1,7 +1,13 @@
 import { prisma } from './prisma';
-import { FeatureKey, FREE_LIMITS } from '@/config/billing';
+import { 
+    FeatureKey, 
+    FREE_CANDIDATE_LIMITS, 
+    FREE_RECRUITER_LIMITS 
+} from '@/config/billing';
 
-
+function getDefaultLimits(role: string): Record<FeatureKey, number> {
+    return role === 'recruiter' ? FREE_RECRUITER_LIMITS : FREE_CANDIDATE_LIMITS;
+}
 
 // ─── Get current billing period start ───────────────────
 function getPeriodStart(): Date {
@@ -16,9 +22,11 @@ async function getFeatureLimit(userId: string, feature: FeatureKey): Promise<num
         include: { plan: true },
     });
 
+    const defaultLimits = getDefaultLimits(user?.role || 'candidate');
+
     if (!user?.plan) {
         // No plan assigned — use free defaults
-        return FREE_LIMITS[feature] ?? 0;
+        return defaultLimits[feature] ?? 0;
     }
 
     const features = user.plan.features as Record<string, number>;
@@ -101,7 +109,8 @@ export async function getUsageSummary(
         include: { plan: true },
     });
 
-    const features = (user?.plan?.features as Record<string, unknown>) || FREE_LIMITS;
+    const defaultLimits = getDefaultLimits(user?.role || 'candidate');
+    const features = (user?.plan?.features as Record<string, unknown>) || defaultLimits;
 
     const usageRecords = await prisma.usageRecord.findMany({
         where: { userId, periodStart },
@@ -111,8 +120,8 @@ export async function getUsageSummary(
 
     const summary: Record<string, { used: number; limit: number; remaining: number }> = {};
 
-    for (const key of Object.keys(FREE_LIMITS) as FeatureKey[]) {
-        const limitValue = features[key] ?? FREE_LIMITS[key];
+    for (const key of Object.keys(defaultLimits) as FeatureKey[]) {
+        const limitValue = features[key] ?? defaultLimits[key];
         const limit = typeof limitValue === 'number' ? limitValue : Number(limitValue || 0);
         const used = (usageMap.get(key) as number) ?? 0;
         

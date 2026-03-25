@@ -23,6 +23,7 @@ export async function GET() {
 
         return NextResponse.json({
             success: true,
+            role: fullUser?.role ?? 'candidate',
             plan: fullUser?.plan ?? {
                 name: 'free',
                 displayName: 'Free',
