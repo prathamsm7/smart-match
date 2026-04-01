@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
                     where: { userId: dbUser.id }
                 });
 
+                const isPrimary = resumeCount === 0;
+
                 // Save to Postgres
                 await prisma.resume.create({
                     data: {
@@ -66,9 +68,19 @@ export async function POST(request: NextRequest) {
                         userId: dbUser.id,
                         vectorId: resumeId,
                         json: payload,
-                        isPrimary: resumeCount === 0, // First resume is primary by default
+                        isPrimary: isPrimary, // First resume is primary by default
                     }
                 });
+
+                // ✅ Sync metadata to Qdrant
+                await qdrantClient.setPayload('resumes', {
+                    payload: {
+                        userId: dbUser.id,
+                        isPrimary: isPrimary
+                    },
+                    points: [resumeId]
+                });
+                console.log(`✅ Synced metadata for Resume ${resumeId} to Qdrant (Primary: ${isPrimary})`);
 
                 // 3. Increment usage
                 await incrementUsage(dbUser.id, 'resume_upload');

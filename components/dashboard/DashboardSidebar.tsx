@@ -16,11 +16,12 @@ import {
   UserCheck,
   FileCheck,
   CreditCard,
+  Sparkles,
 } from 'lucide-react';
 import { getUserInitials, getUserDisplayName, getUserTitle } from './utils/userHelpers';
 import { useRouter } from "next/navigation";
 
-export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'ats-checker' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings' | 'jobs' | 'test' | 'shortlisted' | 'interview-reports' | 'billing';
+export type DashboardView = 'overview' | 'job-matches' | 'resumes' | 'ats-checker' | 'applications' | 'interviews' | 'network' | 'profile' | 'notifications' | 'settings' | 'jobs' | 'test' | 'shortlisted' | 'interview-reports' | 'billing' | 'smart-search';
 
 interface DashboardSidebarProps {
   user: any;
@@ -67,6 +68,7 @@ export function DashboardSidebar({
     { icon: <ClipboardList className="w-5 h-5" />, label: "My Jobs", view: 'jobs' as DashboardView, badge: null },
     { icon: <UserCheck className="w-5 h-5" />, label: "Shortlisted", view: 'shortlisted' as DashboardView, badge: null },
     { icon: <FileCheck className="w-5 h-5" />, label: "Interview Reports", view: 'interview-reports' as DashboardView, badge: null },
+    { icon: <Sparkles className="w-5 h-5" />, label: "Smart Search", view: 'smart-search' as DashboardView, badge: "AI" },
     { icon: <Users className="w-5 h-5" />, label: "Candidates", view: 'network' as DashboardView, badge: null },
     { icon: <User className="w-5 h-5" />, label: "Profile", view: 'profile' as DashboardView, badge: null },
     { icon: <Bell className="w-5 h-5" />, label: "Notifications", view: 'notifications' as DashboardView, badge: null },

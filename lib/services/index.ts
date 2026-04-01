@@ -5,3 +5,4 @@ export { dashboardService } from './dashboard.service';
 export { coverLetterService } from './coverLetter.service';
 export { interviewsService } from './interviews.service';
 export { atsService } from './ats.service';
+export { recruiterSearchService } from './recruiterSearch.service';

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import redisClient from '@/lib/redisClient';
+import { qdrantClient } from '@/lib/clients';
 
 /**
  * GET /api/resumes
@@ -172,6 +173,21 @@ export async function POST(request: NextRequest) {
         isPrimary: true,
       },
     });
+
+    // ✅ Sync to Qdrant
+    // 1. Fetch all resume IDs for this user to ensure Qdrant is perfectly synced
+    const allUserResumes = await prisma.resume.findMany({
+      where: { userId: dbUser.id },
+      select: { id: true, isPrimary: true }
+    });
+
+    // 2. Update Qdrant for each (to ensure only one is ever primary)
+    await Promise.all(allUserResumes.map((r: { id: string; isPrimary: boolean }) => 
+      qdrantClient.setPayload('resumes', {
+        payload: { isPrimary: r.isPrimary, userId: dbUser.id },
+        points: [r.id]
+      })
+    ));
 
     return NextResponse.json({
       success: true,

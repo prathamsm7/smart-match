@@ -15,6 +15,7 @@ import { InterviewsView } from '@/components/candidate/interviews/InterviewsView
 import { ShortlistedCandidatesView } from '@/components/recruiter/ShortlistedCandidatesView';
 import { InterviewReportsView } from '@/components/recruiter/InterviewReportsView';
 import { BillingView } from '@/components/billing/BillingView';
+import { SmartSearchView } from '@/components/recruiter/SmartSearchView';
 
 export default function DashboardPage() {
   const supabase = createBrowserSupabase();
@@ -149,6 +150,8 @@ export default function DashboardPage() {
         );
       case 'billing':
         return <BillingView />;
+      case 'smart-search':
+        return <SmartSearchView />;
       default:
         return null;
     }
