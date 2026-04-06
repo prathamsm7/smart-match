@@ -21,15 +21,30 @@ export async function POST(request: NextRequest) {
 
     const refineQuery = await rewriteQuery(query);
 
+    const {
+      isValid = false,
+      inValidReason = "",
+      rewrittenQuery = query,
+    } = refineQuery || {};
+
+    if (!isValid) {
+      return NextResponse.json({
+        success: false,
+        inValidReason,
+        isValid,
+      });
+    }
+
     // Perform the smart search — returns all results, frontend paginates
-    const { results: candidates, total } = await searchCandidates(refineQuery);
+    const { results: candidates, total } =
+      await searchCandidates(rewrittenQuery);
 
     return NextResponse.json({
       success: true,
       count: candidates.length,
       total,
       candidates,
-      rewrittenQuery: refineQuery,
+      rewrittenQuery,
     });
   } catch (error: any) {
     console.error("❌ Search Endpoint Error:", error);

@@ -8,6 +8,7 @@ export function useCandidateSearch() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invalidQueryReason, setInvalidQueryReason] = useState<string | null>(null);
   
   const [allResults, setAllResults] = useState<Candidate[]>([]);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -25,8 +26,17 @@ export function useCandidateSearch() {
 
       setLoading(true);
       setError(null);
+      setInvalidQueryReason(null);
       try {
         const data = await recruiterSearchService.searchCandidates(q);
+
+        // Handle invalid query — show the contextual reason, don't populate results
+        if (!data.success && data.inValidReason) {
+          setInvalidQueryReason(data.inValidReason);
+          setAllResults([]);
+          setHasSearched(false);
+          return;
+        }
 
         const mappedCandidates: Candidate[] = (data.candidates || []).map(
           (c: any, idx: number) => ({
@@ -102,6 +112,7 @@ export function useCandidateSearch() {
     setQuery,
     loading,
     error,
+    invalidQueryReason,
     results,
     allResults,
     visibleCount,

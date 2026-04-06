@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Lightbulb } from "lucide-react";
 import { SearchBar } from "./SearchBar";
 import { ResultsPanel } from "./ResultsPanel";
 import { ShimmerResults } from "./Shimmer";
@@ -12,6 +12,7 @@ export function SmartSearchView() {
     setQuery,
     loading,
     error,
+    invalidQueryReason,
     results,
     allResults,
     visibleCount,
@@ -42,10 +43,22 @@ export function SmartSearchView() {
         }}
       />
 
+      {/* Real error (network/server failure) */}
       {error && (
         <div className="max-w-4xl mx-auto bg-red-500/10 border border-red-500/20 text-red-300 px-5 py-4 rounded-xl flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
           <p className="text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Invalid query — contextual guidance banner */}
+      {!loading && invalidQueryReason && (
+        <div className="max-w-4xl mx-auto bg-amber-500/10 border border-amber-500/20 px-5 py-4 rounded-xl flex items-start gap-3">
+          <Lightbulb className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-300 mb-0.5">Refine your search</p>
+            <p className="text-sm text-amber-200/80">{invalidQueryReason}</p>
+          </div>
         </div>
       )}
 
@@ -64,3 +77,4 @@ export function SmartSearchView() {
     </div>
   );
 }
+

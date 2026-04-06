@@ -11,7 +11,15 @@ export const recruiterSearchService = {
       throw new Error(errorData.error || "Search failed. Please try again.");
     }
 
-    return response.json();
+    // Return full JSON — includes isValid/inValidReason for invalid query handling
+    return response.json() as Promise<{
+      success: boolean;
+      candidates?: any[];
+      total?: number;
+      rewrittenQuery?: string;
+      isValid?: boolean;
+      inValidReason?: string;
+    }>;
   },
 
   async analyzeCandidate(resumeId: string, query: string) {
