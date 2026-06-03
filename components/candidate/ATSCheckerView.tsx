@@ -10,17 +10,16 @@ import { ATSSectionTabs } from "./ats/ATSSectionTabs";
 import { ATSSectionDetails } from "./ats/ATSSectionDetails";
 import { ATSPriorityFixes } from "./ats/ATSPriorityFixes";
 import { ATSSkillsAnalysis } from "./ats/ATSSkillsAnalysis";
+import {
+  ATS_SCAN_LABELS,
+  initialScanSteps,
+  type ATSProgressEvent,
+  type ATSScanStep,
+} from "@/lib/ats/progress";
 
 type ViewState = "upload" | "scanning" | "results";
 
-interface ScanStep {
-  id: string;
-  label: string;
-  pct: number;
-  status: "pending" | "running" | "done";
-}
-
-import {  } from "@/lib/atsUtils";
+type ScanStep = ATSScanStep;
 
 export function ATSCheckerView() {
   const [file, setFile] = useState<File | null>(null);
@@ -39,13 +38,7 @@ export function ATSCheckerView() {
   const [scanPct, setScanPct] = useState(0);
   const [scanLabel, setScanLabel] = useState("Parsing document…");
   const [scanPbWidth, setScanPbWidth] = useState(0);
-  const [scanSteps, setScanSteps] = useState<ScanStep[]>([
-    { id: "ss1", label: "Document parsing", pct: 20, status: "pending" },
-    { id: "ss2", label: "ATS compatibility", pct: 40, status: "pending" },
-    { id: "ss3", label: "Keyword analysis", pct: 62, status: "pending" },
-    { id: "ss4", label: "Section scoring", pct: 82, status: "pending" },
-    { id: "ss5", label: "AI recommendations", pct: 100, status: "pending" },
-  ]);
+  const [scanSteps, setScanSteps] = useState<ScanStep[]>(initialScanSteps);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,66 +77,37 @@ export function ATSCheckerView() {
     setScanPct(0);
     setScanLabel("Parsing document…");
     setScanPbWidth(0);
-    setScanSteps([
-      { id: "ss1", label: "Document parsing", pct: 20, status: "pending" },
-      { id: "ss2", label: "ATS compatibility", pct: 40, status: "pending" },
-      { id: "ss3", label: "Keyword analysis", pct: 62, status: "pending" },
-      { id: "ss4", label: "Section scoring", pct: 82, status: "pending" },
-      { id: "ss5", label: "AI recommendations", pct: 100, status: "pending" },
-    ]);
+    setScanSteps(initialScanSteps());
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
-  const runScanAnimation = useCallback((): Promise<void> => {
-    return new Promise((resolve) => {
-      const stepLabels = [
-        "Parsing document structure…",
-        "Checking ATS compatibility…",
-        "Analysing keyword density…",
-        "Scoring all sections…",
-        "Generating AI fixes…",
-      ];
-      const stepPcts = [20, 40, 62, 82, 100];
-      let si = 0;
+  const handleProgress = useCallback((event: ATSProgressEvent) => {
+    if (event.type !== "progress") return;
 
-      function nextStep() {
-        if (si >= 5) {
-          resolve();
-          return;
+    const idx = ATS_SCAN_LABELS.indexOf(
+      event.label as (typeof ATS_SCAN_LABELS)[number],
+    );
+
+    setScanLabel(`${event.label}…`);
+    setScanSteps((prev) =>
+      prev.map((s, i) => {
+        if (s.label === event.label) return { ...s, status: event.status };
+        if (event.status === "running" && idx >= 0 && i < idx) {
+          return { ...s, status: "done" };
         }
-        setScanLabel(stepLabels[si]);
-        setScanSteps((prev) =>
-          prev.map((s, i) =>
-            i === si
-              ? { ...s, status: "running" }
-              : i < si
-                ? { ...s, status: "done" }
-                : s,
-          ),
-        );
+        if (event.status === "done" && idx >= 0 && i < idx) {
+          return { ...s, status: "done" };
+        }
+        return s;
+      }),
+    );
 
-        let tick = 0;
-        const pFrom = si === 0 ? 0 : stepPcts[si - 1];
-        const pTo = stepPcts[si];
-
-        const iv = setInterval(() => {
-          tick++;
-          const cp = Math.round(pFrom + (pTo - pFrom) * (tick / 22));
-          setScanPct(Math.min(cp, pTo));
-          setScanPbWidth(Math.min(cp, pTo));
-          if (tick >= 22) {
-            clearInterval(iv);
-            setScanSteps((prev) =>
-              prev.map((s, i) => (i === si ? { ...s, status: "done" } : s)),
-            );
-            si++;
-            setTimeout(nextStep, 300);
-          }
-        }, 40);
-      }
-
-      nextStep();
-    });
+    const doneCount = event.status === "done" && idx >= 0 ? idx + 1 : idx;
+    const pct = Math.round(
+      (Math.max(0, doneCount) / ATS_SCAN_LABELS.length) * 100,
+    );
+    setScanPct(pct);
+    setScanPbWidth(pct);
   }, []);
 
   const startScan = useCallback(async () => {
@@ -151,35 +115,27 @@ export function ATSCheckerView() {
     setError(null);
     setMessage(null);
     setViewState("scanning");
-
-    // Start both the animation and the API call simultaneously
-    const animationPromise = runScanAnimation();
-
-    let apiResult: { analysis: ATSAnalysis; draftId: string } | null = null;
-    let apiError: string | null = null;
+    setScanSteps(initialScanSteps());
+    setScanPct(0);
+    setScanPbWidth(0);
+    setScanLabel("Parsing document…");
 
     try {
-      const res = await atsService.analyzeResume(file);
-      apiResult = { analysis: res.analysis, draftId: res.draftId };
-    } catch (err: unknown) {
-      apiError = err instanceof Error ? err.message : "Failed to analyze resume";
-    }
-
-    // Wait for animation to finish
-    await animationPromise;
-
-    if (apiError) {
-      setError(apiError);
-      setViewState("upload");
-    } else if (apiResult) {
-      setAnalysis(apiResult.analysis);
-      setDraftId(apiResult.draftId);
+      const res = await atsService.analyzeResumeWithProgress(
+        file,
+        handleProgress,
+      );
+      setAnalysis(res.analysis);
+      setDraftId(res.draftId);
       setMessage(
         "ATS analysis ready. Improve your resume, then move it to dashboard when satisfied.",
       );
       setViewState("results");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to analyze resume");
+      setViewState("upload");
     }
-  }, [file, runScanAnimation]);
+  }, [file, handleProgress]);
 
   const handleMove = useCallback(async () => {
     if (!draftId) return;
@@ -542,7 +498,7 @@ export function ATSCheckerView() {
             </div>
             <div className="scan-steps">
               {scanSteps.map((step) => (
-                <div className="scan-step" key={step.id}>
+                <div className="scan-step" key={step.label}>
                   <span className="ss-name">{step.label}</span>
                   <span
                     className={`ss-val${step.status === "done" ? " done" : ""}${step.status === "running" ? " run" : ""}`}

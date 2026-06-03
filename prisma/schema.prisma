@@ -14,21 +14,21 @@ datasource db {
 }
 
 model User {
-  id               String           @id @default(uuid())
-  email            String           @unique
+  id               String            @id @default(uuid())
+  email            String            @unique
   name             String?
-  role             String           @default("candidate") // "candidate" or "recruiter"
-  stripeCustomerId String?          @unique
-  planId           String?          // FK to Plan (null = free tier)
+  role             String            @default("candidate") // "candidate" or "recruiter"
+  stripeCustomerId String?           @unique
+  planId           String?           // FK to Plan (null = free tier)
   resumes          Resume[]
   applications     JobApplication[]
-  postedJobs       Job[]            @relation("JobPoster")
+  postedJobs       Job[]             @relation("JobPoster")
   coverLetters     CoverLetter[]
   interviews       Interview[]
   subscription     Subscription?
   usageRecords     UsageRecord[]
-  plan             Plan?            @relation(fields: [planId], references: [id])
-  createdAt        DateTime         @default(now())
+  plan             Plan?             @relation(fields: [planId], references: [id])
+  createdAt        DateTime          @default(now())
 }
 
 model Resume {
