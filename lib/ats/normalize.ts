@@ -2,19 +2,25 @@ import type { ATSAnalysis, JobTargetedATSAnalysis } from "@/types";
 import {
     clampScore,
     normalizeSection,
+    dedupeAnalysis,
+    uniqueList,
     computeOverallScoreFallback,
     refinePriorityFixes,
 } from "../atsUtils";
 import type { LLMAnalysis } from "./types";
 
-export function buildFinalAnalysis(raw: LLMAnalysis): ATSAnalysis {
-    const sections = {
-        summary: normalizeSection(raw.sections.summary),
-        skills: normalizeSection(raw.sections.skills),
-        experience: normalizeSection(raw.sections.experience),
-        projects: normalizeSection(raw.sections.projects),
-        structure: normalizeSection(raw.sections.structure),
+function normalizeSections(raw: LLMAnalysis["sections"]) {
+    return {
+        summary: normalizeSection(raw.summary),
+        skills: normalizeSection(raw.skills),
+        experience: normalizeSection(raw.experience),
+        projects: normalizeSection(raw.projects),
+        structure: normalizeSection(raw.structure),
     };
+}
+
+function buildAnalysis(raw: LLMAnalysis): { analysis: ATSAnalysis; seen: Set<string> } {
+    const { sections, seen } = dedupeAnalysis(normalizeSections(raw.sections));
 
     const llmScore = typeof raw.overallScore === "number" ? raw.overallScore : NaN;
     const overallScore = clampScore(
@@ -26,23 +32,32 @@ export function buildFinalAnalysis(raw: LLMAnalysis): ATSAnalysis {
     const potential = Math.max(0, Math.min(llmPotential, maxPotential));
 
     return {
-        sections,
-        priorityFixes: refinePriorityFixes(raw.priorityFixes),
-        globalTips: raw.globalTips ?? [],
-        improvementPotential: `+${Math.round(potential)} points`,
-        overallScore,
+        seen,
+        analysis: {
+            sections,
+            priorityFixes: refinePriorityFixes(raw.priorityFixes, seen),
+            globalTips: uniqueList(raw.globalTips, seen),
+            improvementPotential: `+${Math.round(potential)} points`,
+            overallScore,
+        },
     };
 }
 
+export function buildFinalAnalysis(raw: LLMAnalysis): ATSAnalysis {
+    return buildAnalysis(raw).analysis;
+}
+
 export function buildFinalJobAnalysis(raw: LLMAnalysis): JobTargetedATSAnalysis {
-    const base = buildFinalAnalysis(raw);
+    const { analysis, seen } = buildAnalysis(raw);
+    const kwSeen = new Set<string>();
+
     return {
-        ...base,
+        ...analysis,
         keywordAnalysis: {
-            matched: raw.keywordAnalysis?.matched ?? [],
-            missing: raw.keywordAnalysis?.missing ?? [],
+            matched: uniqueList(raw.keywordAnalysis?.matched, kwSeen),
+            missing: uniqueList(raw.keywordAnalysis?.missing, kwSeen),
             matchPercentage: clampScore(raw.keywordAnalysis?.matchPercentage ?? 0),
         },
-        tailoredSuggestions: raw.tailoredSuggestions ?? [],
+        tailoredSuggestions: uniqueList(raw.tailoredSuggestions, seen),
     };
 }

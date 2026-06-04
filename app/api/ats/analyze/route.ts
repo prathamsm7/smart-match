@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import redisClient from "@/lib/redisClient";
-import { extractTextFromPDFBuffer } from "@/lib/resumeHelper";
 import { runATSAgent, streamATSAgent } from "@/lib/ats/workflow";
-import { streamLegacyATS } from "@/lib/ats/legacy";
-import { extractResumeDataForATS, runATSAnalysis } from "@/lib/atsHelper";
 import type { ATSProgressEvent } from "@/lib/ats/progress";
 
 import { authenticateRequest } from "@/lib/auth";
 import { checkUsageLimit, incrementUsage } from "@/lib/usageHelper";
 
 const DRAFT_TTL_SECONDS = 24 * 60 * 60; // 24h
-
-/** true = LangGraph workflow, false = simple extract → analyze */
-const USE_AGENT_WORKFLOW = true;
 
 function sseLine(data: ATSProgressEvent | Record<string, unknown>): string {
     return `data: ${JSON.stringify(data)}\n\n`;
@@ -40,6 +34,7 @@ export async function POST(request: NextRequest) {
         const formData = await request.formData();
         const file = formData.get("file") as File | null;
         const resumeTextInput = formData.get("resumeText") as string | null;
+        const jobDescription = (formData.get("jobDescription") as string | null)?.trim() || undefined;
 
         if (!file && !resumeTextInput) {
             return NextResponse.json(
@@ -48,13 +43,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        let resumeText = resumeTextInput || "";
-        let fileName = "resume.txt";
-        if (file) {
-            fileName = file.name;
-            const buffer = Buffer.from(await file.arrayBuffer());
-            resumeText = await extractTextFromPDFBuffer(buffer);
-        }
+        const fileName = file?.name ?? "resume.txt";
+        const workflowInput = {
+            resumeText: resumeTextInput?.trim() || undefined,
+            fileBuffer: file ? Buffer.from(await file.arrayBuffer()) : undefined,
+            jobDescription,
+        };
 
         const useStream = request.nextUrl.searchParams.get("stream") === "1";
 
@@ -67,11 +61,8 @@ export async function POST(request: NextRequest) {
                     };
 
                     try {
-                        const pipeline = USE_AGENT_WORKFLOW
-                            ? streamATSAgent(resumeText)
-                            : streamLegacyATS(resumeText);
-
-                        let result: { resumeData: unknown; analysis: unknown } | undefined;
+                        const pipeline = streamATSAgent(workflowInput);
+                        let result: Awaited<ReturnType<typeof runATSAgent>> | undefined;
 
                         while (true) {
                             const { value, done } = await pipeline.next();
@@ -90,10 +81,11 @@ export async function POST(request: NextRequest) {
                         await redisClient.set(
                             `ats:draft:${draftId}`,
                             JSON.stringify({
-                                resumeText,
+                                resumeText: result.resumeText,
                                 resumeData: result.resumeData,
                                 analysis: result.analysis,
                                 fileName,
+                                jobDescription,
                             }),
                             { ex: DRAFT_TTL_SECONDS }
                         );
@@ -127,20 +119,12 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        let resumeData;
-        let analysis;
-
-        if (USE_AGENT_WORKFLOW) {
-            ({ resumeData, analysis } = await runATSAgent(resumeText));
-        } else {
-            resumeData = await extractResumeDataForATS(resumeText);
-            analysis = await runATSAnalysis(resumeData);
-        }
+        const { resumeText, resumeData, analysis } = await runATSAgent(workflowInput);
 
         const draftId = crypto.randomUUID();
         await redisClient.set(
             `ats:draft:${draftId}`,
-            JSON.stringify({ resumeText, resumeData, analysis, fileName }),
+            JSON.stringify({ resumeText, resumeData, analysis, fileName, jobDescription }),
             { ex: DRAFT_TTL_SECONDS }
         );
 

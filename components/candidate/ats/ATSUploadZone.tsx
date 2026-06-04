@@ -4,6 +4,8 @@ import React from "react";
 
 interface ATSUploadZoneProps {
   file: File | null;
+  jobDescription: string;
+  onJobDescriptionChange: (value: string) => void;
   triggerUpload: () => void;
   showProgressBar: boolean;
   uploadProgress: number;
@@ -12,6 +14,8 @@ interface ATSUploadZoneProps {
 
 export function ATSUploadZone({
   file,
+  jobDescription,
+  onJobDescriptionChange,
   triggerUpload,
   showProgressBar,
   uploadProgress,
@@ -116,6 +120,29 @@ export function ATSUploadZone({
             </div>
           </div>
         )}
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <label
+          htmlFor="ats-jd"
+          style={{
+            display: "block",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "var(--muted)",
+            marginBottom: 8,
+          }}
+        >
+          Job description (optional — scores resume against this role)
+        </label>
+        <textarea
+          id="ats-jd"
+          className="ats-jd-input"
+          placeholder="Paste the job description here…"
+          value={jobDescription}
+          onChange={(e) => onJobDescriptionChange(e.target.value)}
+          rows={5}
+          onClick={(e) => e.stopPropagation()}
+        />
       </div>
       {file && (
         <div

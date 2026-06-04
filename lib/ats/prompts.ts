@@ -1,58 +1,39 @@
 import type { Resume } from "@/types";
-import type { Job } from "@/types";
 import { SCORE_WEIGHTS } from "../atsUtils";
 
-export function buildExtractResumePrompt(resumeText: string): string {
-    return `
-                    Extract structured resume JSON from the text below.
-                    Return STRICT JSON ONLY with shape:
-                    {
-                        "name": "",
-                        "email": "",
-                        "phone": "",
-                        "location": "",
-                        "summary": "",
-                        "skills": [
-                            preferred skills mentioned in resume skills section, Dont give an guess based on data give the skills only mentioned skills section
-                            {
-                                category: "",
-                                skills: []
-                            }
-                        ],
-                        "social": [],
-                        "preferredJob":"Top 2 job titles based on profile summary and working experience",
-                        "experience": [
-                            {
-                                "title": "",
-                                "company": "",
-                                "startDate": "",
-                                "endDate": "",
-                                "location": "",
-                                "description": ""
-                            }
-                        ],
-                        "projects": [{ "name": "", "description": "" }],
-                        "languages": [],
-                        "softSkills": [],
-                        "totalExperienceYears": 0
-                    }
+export const EXTRACT_RESUME_DATA = `
+                            You are now an expert resume analyser and data extractor agent that extracts the data from the resume and returns it in a structured format.
+                            Your task is to extract the given resume data.
+                            Inputs you may receive: text of the resume.
 
-                    Resume text:
-                    ${resumeText}
-                `;
+                            Return STRICT JSON ONLY with shape:
+                            `;             
+
+// Extract resume user prompt
+export function extractResumeUserPrompt(resumeText: string): string {
+    return `Text of the resume:\n${resumeText}`;
 }
 
-export function buildATSAnalysisPrompt(resume: Resume): string {
-    return `
-            You are an expert Application Tracking System scanner and senior recruiter and resume analyser, your task is to evaluate the given resume using ATS functionality.
-            Be strict as much as possible and critical while evaluating the resume, do not give high scores easily.
 
-            Analyze the resume for role "${resume?.preferredJob || ""}" with ${resume?.totalExperienceYears || 0} years of experience.
-            Return structured output strictly matching the provided schema.
+export function atsAnalysisSystemPrompt(jobDescription?: string): string {
+    const jd = jobDescription?.trim();
+    const jdRules = jd
+        ? `Score the resume against the job description in the user message. Fill keywordAnalysis and tailoredSuggestions.
 
-            --------------------------------------------------
-            RESUME (JSON): ${JSON.stringify(resume, null, 2)}
-            --------------------------------------------------
+            KEYWORD ANALYSIS (strict):
+            - Compare ONLY the job description vs resume (skills, experience, projects, summary).
+            - matched: up to 10 highest-impact skills/keywords clearly present in BOTH JD and resume (most relevant to the role first).
+            - missing: up to 10 highest-impact JD requirements NOT evidenced in the resume (most likely to affect screening first).
+            - Do NOT list every keyword; omit minor, generic, or duplicate terms.
+            - Use consistent Title Case labels (e.g. "Prompt Engineering", "LangChain", "AWS", "CI/CD").
+            - matchPercentage: realistic 0–100 estimate of JD keyword coverage.`
+        : `No job description was provided. Set keywordAnalysis to null and tailoredSuggestions to [].`;
+
+    return `You are an expert Application Tracking System scanner and resume analyser. Your task is to evaluate the resume provided in the user message using ATS functionality.
+            Be strict as much as possible and critical while evaluating the resume; do not give high scores easily.
+            Return structured output strictly matching the provided schema. Return strict JSON only.
+
+            ${jdRules}
 
             OVERALL SCORE (MANDATORY):
             overallScore = round(
@@ -63,155 +44,70 @@ export function buildATSAnalysisPrompt(resume: Resume): string {
                 projects.score   * ${SCORE_WEIGHTS.projects}
             )
 
-            --------------------------------------------------
             CORE RULES:
-
             - Be strict and objective in scoring (0–100 per section)
             - Suggest ONLY high-impact improvements/suggestions (no minor edits)
             - Do NOT estimate scores — follow formula exactly
             - improvementPotential must be realistic and <= remaining gap to 100
-            - Output must follow schema exactly
 
-            --------------------------------------------------
+            PROFILE / CONTACT (mandatory — report under sections.structure):
+            - Use the resume JSON fields name, email, phone (and location if relevant).
+            - name: present, professional full name (not empty, not "N/A", not placeholder).
+            - email: present and valid email format (contains @ and domain).
+            - phone: present and plausible phone number (not empty, not placeholder).
+            - If any are missing or invalid: add clear issues and fixes in structure; add a priorityFix when high impact; reduce structure.score.
+            - If all are valid: mention them in structure.goodThings.
+
             ATS EVALUATION CHECKLIST:
+            1. CONTENT — keyword alignment, measurable impact, strong verbs, summary aligned with target role
+            2. FORMAT — ATS-readable structure, concise bullets
+            3. SECTIONS — summary, skills, experience, projects with clear headings
+            4. SKILLS — relevant to the job description, grouped, reflected in experience/projects
+            5. STYLE — professional tone, no buzzwords, no filler words
 
-            1. CONTENT
-            - Keyword alignment with target role (skills, tools, domain)
-            - Clear, specific experience with measurable impact
-            - Strong action verbs; avoid vague/passive phrasing
-            - Avoid repetition and generic statements
-            - Summary aligned with target role
-            - If found any spelling mistakes or punctuation errors in resume, correct them and suggest the corrected text.
-
-            2. FORMAT
-            - Simple, ATS-readable structure (no complex layouts)
-            - Concise bullets; avoid overly long lines
-
-            3. SECTIONS
-            - Presence of core sections: summary, skills, experience, projects
-            - Clear, standard headings for ATS parsing
-
-            4. SKILLS
-            - Relevant and focused (avoid excessive or mixed skills)
-            - Proper grouping and no duplicates
-            - Skills reflected in experience/projects (not isolated)
-
-            5. STYLE
-            - Professional tone, active voice
-            - Avoid buzzwords and clichés
-            - Clean links and professional contact info
-
-            --------------------------------------------------
             METRIC RULE:
+            - If a metric exists → DO NOT modify or judge its value
+            - If missing → suggest placeholders like [Insert % improvement]; max 2-3 per section
+            - Do not require metrics in projects if not available
 
-            - If a metric exists → DO NOT modify or judge its value as it is given by the user we can't make any assumption or judgement on the metrics, it may have great metric value for the user perspective and system dont have the overall context of it.
-            - Only suggest adding context if unclear
-            - If missing → suggest adding metrics using placeholders like [Insert % improvement]
-            - Do not ask to add too many metrics, only suggest if it is really necessary, per section 2-3 metrics are enough.
-            - Projects are build by the candidates and each and every may not have metrics, so do not suggest adding metrics in projects section if not available.
-
-            --------------------------------------------------
             IMPROVEMENT RULES:
-
-            - Only improve objectively weak content (missing metrics, vague, weak verbs)
-            - No synonym swaps or stylistic rewrites
-            - No hallucination — use only given content
+            - Only improve objectively weak content; no synonym swaps; no hallucination
             - "original" must exactly match resume text
-            - Empty improvements are valid and preferred if content is strong
+            - Never suggest the same wording change more than once (e.g. do not output multiple before/after pairs that all become "LLM Fine-Tuning")
+            - Skip cosmetic-only edits (casing, hyphenation, word order) unless required for ATS parsing
 
-            --------------------------------------------------
-            PRIORITY FIXES:
+            UNIQUENESS (MANDATORY — ZERO DUPLICATE CONTENT):
+            - Every issue, fix, tip, suggestion, and improvement must be globally unique across the entire JSON response.
+            - Applies to ALL of: sections.*.issues, sections.*.fixes, sections.*.tips, sections.*.goodThings, sections.*.improvements, priorityFixes[].text, globalTips, tailoredSuggestions, keywordAnalysis.matched, keywordAnalysis.missing.
+            - Do NOT repeat the same point in different sections — assign each finding to exactly one best section.
+            - Do NOT paraphrase the same advice twice with different wording.
+            - sections.*.improvements: at most ONE entry per resume phrase or skill label; if multiple originals map to the same fix, keep only the single best pair.
+            - Before returning JSON, review every list and remove duplicates; when in doubt, omit the weaker duplicate.
 
-            - Provide a few high-impact, non-overlapping fixes
-            - Must be actionable and tied to a section
-            - Avoid generic suggestions
 
-            --------------------------------------------------
-            DECISION RULES (STABILITY):
+            PRIORITY FIXES: few high-impact, actionable, section-tied fixes; must not repeat any section issue or fix text
 
-            - If overallScore is high OR improvementPotential is low:
-            → return minimal/no suggestions
+            DECISION RULES:
+            - High overallScore or low improvementPotential → minimal suggestions
+            - Section score >= 85 → no issues/improvements for that section
 
-            - If a section is strong or section score is >= 85:
-            → do not suggest issues or improvements for that section
+            - Dont make up any information, only based on the resume and the job description.
+            - If any information is not present in the resume, keep it empty.
 
-            - Empty issues/improvements/priorityFixes are valid outcomes
-
-            --------------------------------------------------
-            FINAL GUIDELINES:
-
-            - Focus on keywords, experience impact, and structure (core ATS factors) 
-            - Ensure keywords are relevant and used contextually, not just listed
-            - Keep feedback concise, specific, and actionable  
-            - Always include goodThings for each section   
-            
-            OUTPUT FORMAT- 
-            {
-                "sections": {
-                    "summary": {
-                    "score": 0-100,
-                    "issues": [
-                        Only list issues that are objectively bad, missing metrics, weak passive verbs, completely vague.
-                    ],
-                    "fixes": [],
-                    "examples": [],
-                    "improvements": [
-                        { 
-                            "original": "exact bad quote from resume", 
-                            "improved": "fixed/improved version" 
-                        }
-                    ],
-                    "tips": [],
-                    "goodThings": []
-                    },
-                },
-                "overallScore": <number, computed using formula>,
-                "improvementPotential": <number, MUST satisfy: overallScore + improvementPotential <= 100 >,
-                "priorityFixes": [
-                    {
-                    "text": "",
-                    "impact": "high" | "medium",
-                    "category": "experience" | "skills" | "structure" | "projects" | "summary"
-                    }
-                ],
-                "globalTips": [],
-                "confidence": <number between 0 and 1>  
-            }
-    `;
+            `;
 }
 
-export function buildJobTargetedPrompt(resume: Resume, job: Job): string {
-    return `
-            You are an expert ATS system and senior recruiter.
-            Analyze the resume AGAINST THE JOB below and return STRICT JSON following the schema.
+export function atsAnalysisUserPrompt(resume: Resume, jobDescription?: string): string {
+    const jd = jobDescription?.trim();
+    const jdBlock = jd
+        ? `\n\nJOB DESCRIPTION:\n${jd}\n`
+        : "";
 
+    return `Analyze this resume${jd ? " against the job description below" : ""} for role "${resume?.preferredJob || ""}" with ${resume?.totalExperienceYears ?? 0} years of experience.
+
+    
             RESUME (JSON):
             ${JSON.stringify(resume, null, 2)}
-
-            JOB (JSON):
-            ${JSON.stringify(job, null, 2)}
-
-            RETURN STRICT JSON ONLY:
-            {
-            "sections": { ...same shape as general analysis (score, issues, fixes, examples, improvements, tips, goodThings)... },
-            "overallScore": <number, computed using the weights above>,
-            "improvementPotential": <number, overallScore + improvementPotential <= 100>,
-            "priorityFixes": [{ "text": "", "impact": "high|medium" }],
-            "globalTips": [],
-            "keywordAnalysis": {
-                "matched": [],
-                "missing": [],
-                "matchPercentage": 0-100
-            },
-            "tailoredSuggestions": []
-            }
-
-            CRITICAL: overallScore + improvementPotential MUST be <= 100.
-
-            SCORING & KEYWORDS:
-            - Evaluate all resume sections as before.
-            - Compare the resume to the job description/requirements/responsibilities.
-            - Identify matched and missing keywords/skills; set matchPercentage based on relevance coverage.
-            - Tailored suggestions should point to WHERE to add missing items (e.g., experience section, skills section).
-        `;
+            
+            ${jdBlock}`;
 }

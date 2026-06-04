@@ -1,4 +1,4 @@
-import type { SectionAnalysis } from "@/types";
+import type { ATSAnalysis, SectionAnalysis } from "@/types";
 
 export type LLMSection = {
     score: number;
@@ -17,6 +17,71 @@ export const clampScore = (value: unknown) => {
     if (num > 100) return 100;
     return num;
 };
+
+function dedupeKey(text: string): string {
+    return text.trim().toLowerCase();
+}
+
+/** Keep first occurrence of each string (case-insensitive). */
+export function uniqueList(items: string[] | undefined, seen: Set<string>): string[] {
+    const out: string[] = [];
+    for (const item of items ?? []) {
+        const text = item.trim();
+        const key = dedupeKey(text);
+        if (text.length < 4 || seen.has(key)) continue;
+        seen.add(key);
+        out.push(text);
+    }
+    return out;
+}
+
+/** Drop duplicate before/after pairs (same improved text). */
+export function uniqueImprovements(
+    items: Array<{ original: string; improved: string }> | undefined,
+    seen: Set<string>
+): Array<{ original: string; improved: string }> {
+    const out: Array<{ original: string; improved: string }> = [];
+    for (const item of items ?? []) {
+        const original = item.original?.trim() ?? "";
+        const improved = item.improved?.trim() ?? "";
+        const key = dedupeKey(improved);
+        if (!original || !improved || dedupeKey(original) === key || seen.has(key)) continue;
+        seen.add(key);
+        out.push({ original, improved });
+    }
+    return out;
+}
+
+const SECTION_KEYS = [
+    "summary",
+    "skills",
+    "experience",
+    "projects",
+    "structure",
+] as const;
+
+export function dedupeAnalysis(sections: ATSAnalysis["sections"]): {
+    sections: ATSAnalysis["sections"];
+    seen: Set<string>;
+} {
+    const seen = new Set<string>();
+    const deduped = {} as ATSAnalysis["sections"];
+
+    for (const key of SECTION_KEYS) {
+        const section = sections[key];
+        deduped[key] = {
+            ...section,
+            issues: uniqueList(section.issues, seen),
+            fixes: uniqueList(section.fixes, seen),
+            tips: uniqueList(section.tips, seen),
+            goodThings: uniqueList(section.goodThings, seen),
+            examples: uniqueList(section.examples, seen),
+            improvements: uniqueImprovements(section.improvements, seen),
+        };
+    }
+
+    return { sections: deduped, seen };
+}
 
 export const normalizeSection = (section: LLMSection): SectionAnalysis => ({
     score: clampScore(section.score),
@@ -53,20 +118,27 @@ export function computeOverallScoreFallback(sections: {
 }
 
 export function refinePriorityFixes(
-    fixes: Array<{ text: string; impact?: string }> | undefined
+    fixes: Array<{ text: string; impact?: string }> | undefined,
+    seen?: Set<string>
 ): Array<{ text: string; impact: "high" | "medium" }> {
     if (!fixes || !Array.isArray(fixes)) return [];
-    const cleaned = fixes
-        .map((f) => {
-            const impact: "high" | "medium" =
-                f?.impact === "high" || f?.impact === "medium" ? f.impact : "high";
-            return {
-                text: (f?.text ?? "").trim(),
-                impact,
-            };
-        })
-        .filter((f) => f.text.length > 5)
-        .slice(0, 5);
+    const globalSeen = seen ?? new Set<string>();
+
+    const cleaned: Array<{ text: string; impact: "high" | "medium" }> = [];
+    for (const f of fixes) {
+        const text = (f?.text ?? "").trim();
+        if (text.length <= 5) continue;
+
+        const key = dedupeKey(text);
+        if (globalSeen.has(key)) continue;
+
+        globalSeen.add(key);
+        const impact: "high" | "medium" =
+            f?.impact === "high" || f?.impact === "medium" ? f.impact : "high";
+        cleaned.push({ text, impact });
+        if (cleaned.length >= 5) break;
+    }
+
     return cleaned;
 }
 

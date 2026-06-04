@@ -59,14 +59,7 @@ export function ATSSectionDetails({
               >
                 Issues
               </div>
-              <ul
-                style={{
-                  margin: 0,
-                  paddingLeft: 18,
-                  fontSize: 13,
-                  color: "var(--text2)",
-                }}
-              >
+              <ul className="ats-report-list">
                 {activeSection.issues.map((issue: string, i: number) => (
                   <li key={i}>{issue}</li>
                 ))}
@@ -81,14 +74,7 @@ export function ATSSectionDetails({
               >
                 Suggested fixes
               </div>
-              <ul
-                style={{
-                  margin: 0,
-                  paddingLeft: 18,
-                  fontSize: 13,
-                  color: "var(--text2)",
-                }}
-              >
+              <ul className="ats-report-list">
                 {activeSection.fixes.map((fix: string, i: number) => (
                   <li key={i}>{fix}</li>
                 ))}

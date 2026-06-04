@@ -16,7 +16,6 @@ export function ATSPriorityFixes({
   if (!priorityFixes || priorityFixes.length === 0) return null;
 
   return (
-    <div className="two-col">
       <div className="card">
         <div className="card-head">
           <div className="card-title">
@@ -77,6 +76,5 @@ export function ATSPriorityFixes({
           ))}
         </div>
       </div>
-    </div>
   );
 }

@@ -1,9 +1,9 @@
-import type { ATSAnalysis } from "@/types";
+import type { ATSAnalysis, JobTargetedATSAnalysis } from "@/types";
 import type { ATSProgressEvent } from "@/lib/ats/progress";
 
 export interface ATSAnalyzeResponse {
     draftId: string;
-    analysis: ATSAnalysis;
+    analysis: ATSAnalysis | JobTargetedATSAnalysis;
     resumeData: unknown;
     fileName: string;
 }
@@ -46,10 +46,14 @@ export const atsService = {
 
     async analyzeResumeWithProgress(
         file: File,
-        onProgress: (event: ATSProgressEvent) => void
+        onProgress: (event: ATSProgressEvent) => void,
+        jobDescription?: string
     ): Promise<ATSAnalyzeResponse> {
         const formData = new FormData();
         formData.append("file", file);
+        if (jobDescription?.trim()) {
+            formData.append("jobDescription", jobDescription.trim());
+        }
 
         const response = await fetch("/api/ats/analyze?stream=1", {
             method: "POST",
@@ -85,7 +89,7 @@ export const atsService = {
                 if (event.type === "complete") {
                     result = {
                         draftId: event.draftId,
-                        analysis: event.analysis as ATSAnalysis,
+                        analysis: event.analysis as ATSAnalysis | JobTargetedATSAnalysis,
                         resumeData: event.resumeData,
                         fileName: event.fileName,
                     };

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { atsService } from "@/lib/services";
-import type { ATSAnalysis } from "@/types";
+import type { ATSAnalysis, JobTargetedATSAnalysis } from "@/types";
 import "./ats/ats-checker.css";
 import { ATSUploadZone } from "./ats/ATSUploadZone";
 import { ATSScoreHero } from "./ats/ATSScoreHero";
@@ -10,6 +10,7 @@ import { ATSSectionTabs } from "./ats/ATSSectionTabs";
 import { ATSSectionDetails } from "./ats/ATSSectionDetails";
 import { ATSPriorityFixes } from "./ats/ATSPriorityFixes";
 import { ATSSkillsAnalysis } from "./ats/ATSSkillsAnalysis";
+import { ATSKeywordMatch } from "./ats/ATSKeywordMatch";
 import {
   ATS_SCAN_LABELS,
   initialScanSteps,
@@ -23,7 +24,10 @@ type ScanStep = ATSScanStep;
 
 export function ATSCheckerView() {
   const [file, setFile] = useState<File | null>(null);
-  const [analysis, setAnalysis] = useState<ATSAnalysis | null>(null);
+  const [jobDescription, setJobDescription] = useState("");
+  const [analysis, setAnalysis] = useState<
+    ATSAnalysis | JobTargetedATSAnalysis | null
+  >(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -67,6 +71,7 @@ export function ATSCheckerView() {
 
   const resetPage = useCallback(() => {
     setFile(null);
+    setJobDescription("");
     setAnalysis(null);
     setDraftId(null);
     setError(null);
@@ -124,6 +129,7 @@ export function ATSCheckerView() {
       const res = await atsService.analyzeResumeWithProgress(
         file,
         handleProgress,
+        jobDescription,
       );
       setAnalysis(res.analysis);
       setDraftId(res.draftId);
@@ -135,7 +141,7 @@ export function ATSCheckerView() {
       setError(err instanceof Error ? err.message : "Failed to analyze resume");
       setViewState("upload");
     }
-  }, [file, handleProgress]);
+  }, [file, jobDescription, handleProgress]);
 
   const handleMove = useCallback(async () => {
     if (!draftId) return;
@@ -158,6 +164,10 @@ export function ATSCheckerView() {
   const priorityFixes = analysis?.priorityFixes ?? [];
   const globalTips = analysis?.globalTips ?? [];
   const improvementPotential = analysis?.improvementPotential ?? "+15";
+  const keywordAnalysis =
+    analysis && "keywordAnalysis" in analysis
+      ? analysis.keywordAnalysis
+      : null;
 
   // Parse improvement potential number
   const potentialNum =
@@ -448,6 +458,8 @@ export function ATSCheckerView() {
         {viewState === "upload" && (
           <ATSUploadZone
             file={file}
+            jobDescription={jobDescription}
+            onJobDescriptionChange={setJobDescription}
             triggerUpload={triggerUpload}
             showProgressBar={showProgressBar}
             uploadProgress={uploadProgress}
@@ -545,10 +557,16 @@ export function ATSCheckerView() {
               </div>
               <div className="stat-item">
                 <div className="stat-val" style={{ color: "var(--teal)" }}>
-                  {sections.skills.score}%
+                  {keywordAnalysis
+                    ? `${keywordAnalysis.matchPercentage}%`
+                    : `${sections.skills.score}%`}
                 </div>
                 <div className="stat-lbl">Keyword Match</div>
-                <div className="stat-chg up">↑ vs avg 61%</div>
+                <div className="stat-chg up">
+                  {keywordAnalysis
+                    ? `${keywordAnalysis.matched.length} matched`
+                    : "↑ skills score"}
+                </div>
               </div>
               <div className="stat-item">
                 <div className="stat-val">1 pg</div>
@@ -564,6 +582,10 @@ export function ATSCheckerView() {
               </div>
             </div>
 
+            {keywordAnalysis && (
+              <ATSKeywordMatch keywordAnalysis={keywordAnalysis} />
+            )}
+
             {/* GLOBAL TIPS */}
             {globalTips.length > 0 && (
               <div className="global-tips">
@@ -576,18 +598,7 @@ export function ATSCheckerView() {
                   </svg>
                 </div>
                 <div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "var(--cyan)",
-                      marginBottom: 8,
-                      letterSpacing: ".04em",
-                      textTransform: "uppercase" as const,
-                    }}
-                  >
-                    Global Recommendations
-                  </div>
+                  <div className="report-section-title">Global Recommendations</div>
                   <div className="gt-items">
                     {globalTips.map((tip, i) => (
                       <div className="gt-item" key={i}>

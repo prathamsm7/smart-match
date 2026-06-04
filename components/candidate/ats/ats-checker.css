@@ -331,6 +331,22 @@
   color: var(--text3);
   font-family: var(--fm);
 }
+.ats-page .ats-jd-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  background: var(--s3);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  font-family: inherit;
+}
+.ats-page .ats-jd-input:focus {
+  outline: none;
+  border-color: rgba(0, 212, 255, 0.45);
+}
 .ats-page .progress-bar {
   width: 100%;
   max-width: 320px;
@@ -630,7 +646,7 @@
   background-clip: text;
 }
 .ats-page .sh-desc {
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--text3);
   line-height: 1.7;
   max-width: 440px;
@@ -804,7 +820,7 @@
   background: rgba(255, 255, 255, 0.02);
 }
 .ats-page .card-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
   display: flex;
@@ -912,7 +928,7 @@
   flex: 1;
 }
 .ats-page .fix-text {
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
   margin-bottom: 4px;
@@ -1026,7 +1042,7 @@
 }
 .ats-page .ba-txt {
   padding: 14px 16px;
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.7;
   font-weight: 400;
 }
@@ -1059,7 +1075,7 @@
 .ats-page .tab {
   padding: 7px 16px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   color: var(--text3);
@@ -1073,7 +1089,7 @@
   color: var(--text2);
 }
 .ats-page .tab-meta {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text3);
 }
 
@@ -1112,13 +1128,13 @@
   flex: 1;
 }
 .ats-page .sec-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
   margin-bottom: 4px;
 }
 .ats-page .sec-desc {
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--text3);
   line-height: 1.6;
 }
@@ -1160,7 +1176,7 @@
   margin-bottom: 0;
 }
 .ats-page .sg-head {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1181,8 +1197,8 @@
   gap: 6px;
 }
 .ats-page .skill {
-  font-size: 11px;
-  padding: 4px 11px;
+  font-size: 12.5px;
+  padding: 5px 12px;
   border-radius: 7px;
   font-weight: 600;
   font-family: var(--fm);
@@ -1259,7 +1275,7 @@
   margin-bottom: 3px;
 }
 .ats-page .tip-d {
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--text3);
   line-height: 1.6;
 }
@@ -1291,7 +1307,7 @@
   margin-top: 1px;
 }
 .ats-page .good-txt {
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--text2);
   line-height: 1.55;
 }
@@ -1351,7 +1367,7 @@
   gap: 6px;
 }
 .ats-page .gt-item {
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--text2);
   display: flex;
   align-items: flex-start;
@@ -1361,6 +1377,91 @@
   color: var(--cyan);
   margin-top: 4px;
   flex-shrink: 0;
+}
+
+/* ── REPORT TYPOGRAPHY & LISTS ── */
+.ats-page .report-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cyan);
+  margin-bottom: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ats-page .ats-report-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text2);
+}
+
+.ats-page .ats-report-list li::marker {
+  color: var(--cyan);
+}
+
+/* ── JOB KEYWORD MATCH ── */
+.ats-page .keyword-match {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.06),
+    rgba(41, 121, 255, 0.06)
+  );
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ats-page .keyword-match-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ats-page .keyword-match-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ats-page .keyword-match-pct {
+  font-family: var(--fm);
+  font-size: 13px;
+  color: var(--teal);
+  font-weight: 600;
+}
+
+.ats-page .keyword-match-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ats-page .keyword-match-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ats-page .matched-label {
+  color: var(--teal);
+}
+
+.ats-page .missing-label {
+  color: var(--red2);
 }
 
 /* ── ERROR / MESSAGE ── */

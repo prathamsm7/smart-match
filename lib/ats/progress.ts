@@ -6,10 +6,10 @@ export interface ATSScanStep {
 }
 
 export const ATS_SCAN_LABELS = [
-    "Document parsing",
-    "ATS compatibility",
+    "Resume parsing",
+    "Resume analysis",
     "Keyword analysis",
-    "Section scoring",
+    "ATS scoring",
     "AI recommendations",
 ] as const;
 
@@ -31,7 +31,8 @@ export function progressEvent(
 
 /** Labels to mark done when a graph node finishes */
 export const NODE_DONE_LABELS: Record<string, string[]> = {
-    parseDocument: ["Document parsing", "ATS compatibility"],
-    analyzeResume: ["Keyword analysis", "Section scoring"],
+    extractText: ["Resume parsing"],
+    parseDocument: ["Resume analysis"],
+    analyzeResume: ["Keyword analysis", "ATS scoring"],
     recommendations: ["AI recommendations"],
 };

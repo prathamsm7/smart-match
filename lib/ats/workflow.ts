@@ -1,8 +1,9 @@
 import { Annotation, StateGraph, START, END } from "@langchain/langgraph";
 import type { GraphNode } from "@langchain/langgraph";
-import type { ATSAnalysis, Resume } from "@/types";
+import type { ATSAnalysis, JobTargetedATSAnalysis, Resume } from "@/types";
+import { extractTextFromPDFBuffer } from "@/lib/resumeHelper";
 import { extractResume, analyzeResume } from "./llm";
-import { buildFinalAnalysis } from "./normalize";
+import { buildFinalAnalysis, buildFinalJobAnalysis } from "./normalize";
 import type { LLMAnalysis } from "./types";
 import {
     ATS_SCAN_LABELS,
@@ -11,27 +12,65 @@ import {
     type ATSProgressEvent,
 } from "./progress";
 
+export type ATSWorkflowResult = {
+    resumeText: string;
+    resumeData: Resume;
+    analysis: ATSAnalysis | JobTargetedATSAnalysis;
+};
+
+export type ATSWorkflowInput = {
+    resumeText?: string;
+    fileBuffer?: Buffer;
+    jobDescription?: string;
+};
+
 const ATSState = Annotation.Root({
-    resumeText: Annotation<string>,
+    resumeText: Annotation<string | undefined>,
+    fileBuffer: Annotation<Buffer | undefined>,
+    jobDescription: Annotation<string | undefined>,
     resumeData: Annotation<Resume | undefined>,
     rawAnalysis: Annotation<LLMAnalysis | undefined>,
-    analysis: Annotation<ATSAnalysis | undefined>,
+    analysis: Annotation<ATSAnalysis | JobTargetedATSAnalysis | undefined>,
     error: Annotation<string | undefined>,
 });
 
+/** PDF bytes or pasted text → plain resume text */
+const extractTextNode: GraphNode<typeof ATSState> = async (state) => {
+    try {
+        if (state.fileBuffer) {
+            const text = await extractTextFromPDFBuffer(state.fileBuffer);
+            if (!text?.trim()) {
+                return { error: "Could not extract text from PDF" };
+            }
+            return { resumeText: text.trim(), error: undefined };
+        }
+        const text = state.resumeText?.trim() ?? "";
+        if (!text) {
+            return { error: "Resume text is empty" };
+        }
+        return { resumeText: text, error: undefined };
+    } catch (err) {
+        return {
+            error: err instanceof Error ? err.message : "Resume text extraction failed",
+        };
+    }
+};
+
+/** Resume text → structured JSON */
 const parseDocumentNode: GraphNode<typeof ATSState> = async (state) => {
+    if (state.error || !state.resumeText) return {};
     try {
         const resumeData = await extractResume(state.resumeText);
         return { resumeData, error: undefined };
     } catch (err) {
-        return { error: err instanceof Error ? err.message : "Document parsing failed" };
+        return { error: err instanceof Error ? err.message : "Resume data extraction failed" };
     }
 };
 
 const analyzeResumeNode: GraphNode<typeof ATSState> = async (state) => {
     if (state.error || !state.resumeData) return {};
     try {
-        const rawAnalysis = await analyzeResume(state.resumeData);
+        const rawAnalysis = await analyzeResume(state.resumeData, state.jobDescription);
         return { rawAnalysis, error: undefined };
     } catch (err) {
         return { error: err instanceof Error ? err.message : "Analysis failed" };
@@ -41,7 +80,9 @@ const analyzeResumeNode: GraphNode<typeof ATSState> = async (state) => {
 const recommendationsNode: GraphNode<typeof ATSState> = async (state) => {
     if (state.error || !state.rawAnalysis) return {};
     try {
-        const analysis = buildFinalAnalysis(state.rawAnalysis);
+        const analysis = state.jobDescription?.trim()
+            ? buildFinalJobAnalysis(state.rawAnalysis)
+            : buildFinalAnalysis(state.rawAnalysis);
         return { analysis, error: undefined };
     } catch (err) {
         return { error: err instanceof Error ? err.message : "Recommendations failed" };
@@ -49,38 +90,51 @@ const recommendationsNode: GraphNode<typeof ATSState> = async (state) => {
 };
 
 const compiledGraph = new StateGraph(ATSState)
+    .addNode("extractText", extractTextNode)
     .addNode("parseDocument", parseDocumentNode)
     .addNode("analyzeResume", analyzeResumeNode)
     .addNode("recommendations", recommendationsNode)
-    .addEdge(START, "parseDocument")
+    .addEdge(START, "extractText")
+    .addEdge("extractText", "parseDocument")
     .addEdge("parseDocument", "analyzeResume")
     .addEdge("analyzeResume", "recommendations")
     .addEdge("recommendations", END)
     .compile();
 
-const NODE_ORDER = ["parseDocument", "analyzeResume", "recommendations"] as const;
+const NODE_ORDER = ["extractText", "parseDocument", "analyzeResume", "recommendations"] as const;
 
-async function invokeGraph(resumeText: string) {
-    const text = resumeText.trim();
-    if (!text) throw new Error("Resume text is empty");
-    return compiledGraph.invoke({ resumeText: text });
+function graphInput(input: ATSWorkflowInput) {
+    const jd = input.jobDescription?.trim();
+    return {
+        resumeText: input.resumeText?.trim() || undefined,
+        fileBuffer: input.fileBuffer,
+        jobDescription: jd || undefined,
+    };
+}
+
+function assertWorkflowInput(input: ATSWorkflowInput) {
+    if (!input.fileBuffer && !input.resumeText?.trim()) {
+        throw new Error("Either file or resume text is required");
+    }
+}
+
+async function invokeGraph(input: ATSWorkflowInput) {
+    assertWorkflowInput(input);
+    return compiledGraph.invoke(graphInput(input));
 }
 
 export async function* streamATSAgent(
-    resumeText: string
-): AsyncGenerator<ATSProgressEvent, { resumeData: Resume; analysis: ATSAnalysis }> {
-    const text = resumeText.trim();
-    if (!text) throw new Error("Resume text is empty");
+    input: ATSWorkflowInput
+): AsyncGenerator<ATSProgressEvent, ATSWorkflowResult> {
+    assertWorkflowInput(input);
 
     yield progressEvent(ATS_SCAN_LABELS[0], "running");
 
-    const stream = await compiledGraph.stream(
-        { resumeText: text },
-        { streamMode: "updates" }
-    );
+    const initial = graphInput(input);
+    const stream = await compiledGraph.stream(initial, { streamMode: "updates" });
 
     type GraphState = Awaited<ReturnType<typeof invokeGraph>>;
-    let merged: Partial<GraphState> = { resumeText: text };
+    let merged: Partial<GraphState> = { ...initial };
 
     for await (const update of stream) {
         const updateRecord = update as Record<string, Partial<GraphState>>;
@@ -105,21 +159,26 @@ export async function* streamATSAgent(
 
     const finalState = merged as GraphState;
     if (finalState.error) throw new Error(finalState.error);
-    if (!finalState.resumeData || !finalState.analysis) {
+    if (!finalState.resumeText || !finalState.resumeData || !finalState.analysis) {
         throw new Error("ATS workflow returned incomplete result");
     }
 
-    return { resumeData: finalState.resumeData, analysis: finalState.analysis };
+    return {
+        resumeText: finalState.resumeText,
+        resumeData: finalState.resumeData,
+        analysis: finalState.analysis,
+    };
 }
 
-export async function runATSAgent(resumeText: string): Promise<{
-    resumeData: Resume;
-    analysis: ATSAnalysis;
-}> {
-    const state = await invokeGraph(resumeText);
+export async function runATSAgent(input: ATSWorkflowInput): Promise<ATSWorkflowResult> {
+    const state = await invokeGraph(input);
     if (state.error) throw new Error(state.error);
-    if (!state.resumeData || !state.analysis) {
+    if (!state.resumeText || !state.resumeData || !state.analysis) {
         throw new Error("ATS workflow returned incomplete result");
     }
-    return { resumeData: state.resumeData, analysis: state.analysis };
+    return {
+        resumeText: state.resumeText,
+        resumeData: state.resumeData,
+        analysis: state.analysis,
+    };
 }

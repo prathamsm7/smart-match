@@ -12,7 +12,6 @@ export function ATSSkillsAnalysis({ sections }: ATSSkillsAnalysisProps) {
   if (!sections || !sections.skills) return null;
 
   return (
-    <div className="two-col">
       <div className="card">
         <div className="card-head">
           <div className="card-title">
@@ -94,39 +93,34 @@ export function ATSSkillsAnalysis({ sections }: ATSSkillsAnalysisProps) {
                 className="sg-head"
                 style={{ color: "var(--amber)" }}
               >
-                Add or strengthen{" "}
+                Issues{" "}
                 <span className="sg-count">
                   {sections.skills.issues.length}
                 </span>
               </div>
-              <div className="skills-row">
+              <ul className="ats-report-list">
                 {sections.skills.issues.map((s: string, i: number) => (
-                  <span className="skill partial" key={i}>
-                    {s}
-                  </span>
+                  <li key={i}>{s}</li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
-          {/* Fixes as missing */}
           {sections.skills.fixes?.length > 0 && (
             <div className="skill-grp">
               <div
                 className="sg-head"
                 style={{ color: "var(--red2)" }}
               >
-                Suggested additions{" "}
+                Suggested fixes{" "}
                 <span className="sg-count">
                   {sections.skills.fixes.length}
                 </span>
               </div>
-              <div className="skills-row">
+              <ul className="ats-report-list">
                 {sections.skills.fixes.map((s: string, i: number) => (
-                  <span className="skill missing" key={i}>
-                    {s}
-                  </span>
+                  <li key={i}>{s}</li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
           <div className="skill-legend">
@@ -154,6 +148,5 @@ export function ATSSkillsAnalysis({ sections }: ATSSkillsAnalysisProps) {
           </div>
         </div>
       </div>
-    </div>
   );
 }

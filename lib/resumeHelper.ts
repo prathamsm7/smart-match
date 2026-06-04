@@ -253,7 +253,7 @@ const resumeAgent = new Agent({
  */
 export async function extractTextFromPDFBuffer(buffer: Buffer) {
     const parser = new PDFParse({ data: buffer, verbosity: VerbosityLevel.WARNINGS });
-    const result = await parser.getText();
+    const result = await parser.getText({parseHyperlinks:true});
     await parser.destroy();
     return result.text;
 }
