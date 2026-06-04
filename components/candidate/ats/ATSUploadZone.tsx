@@ -21,8 +21,10 @@ export function ATSUploadZone({
   uploadProgress,
   startScan,
 }: ATSUploadZoneProps) {
+  const hasJd = jobDescription.trim().length > 0;
+
   return (
-    <div>
+    <div className="upload-landing">
       <div
         className={`upload-zone${file ? " loaded" : ""}`}
         onClick={triggerUpload}
@@ -61,8 +63,8 @@ export function ATSUploadZone({
         </div>
         <div className="upload-sub">
           {file
-            ? 'File ready for AI analysis. Click "Run ATS Analysis" to continue.'
-            : "Our AI analyzes 40+ ATS criteria — keywords, formatting, section scores, readability. Your file is never stored."}
+            ? "Ready to scan — add a job description below for role-specific scoring."
+            : "PDF, Word, or text · analyzed in seconds · not stored"}
         </div>
         {!file && (
           <div className="fmt-row">
@@ -121,44 +123,55 @@ export function ATSUploadZone({
           </div>
         )}
       </div>
-      <div style={{ marginTop: 16 }}>
-        <label
-          htmlFor="ats-jd"
-          style={{
-            display: "block",
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--muted)",
-            marginBottom: 8,
-          }}
-        >
-          Job description (optional — scores resume against this role)
-        </label>
+
+      <div className={`jd-card${hasJd ? " jd-card--active" : ""}`}>
+        <div className="jd-card-head">
+          <div className="jd-card-title-wrap">
+            <span className="jd-card-icon" aria-hidden>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect
+                  x="2"
+                  y="1"
+                  width="12"
+                  height="14"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                />
+                <path
+                  d="M4.5 5h7M4.5 7.5h5M4.5 10h6"
+                  stroke="currentColor"
+                  strokeWidth="1.1"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+            <div>
+              <label htmlFor="ats-jd" className="jd-card-label">
+                Target job description
+              </label>
+              <p className="jd-card-hint">
+                Optional — unlocks keyword match & role-specific fixes
+              </p>
+            </div>
+          </div>
+          <span className="jd-card-badge">Recommended</span>
+        </div>
         <textarea
           id="ats-jd"
           className="ats-jd-input"
-          placeholder="Paste the job description here…"
+          placeholder="Paste the job posting here for tailored ATS scoring…"
           value={jobDescription}
           onChange={(e) => onJobDescriptionChange(e.target.value)}
-          rows={5}
+          rows={4}
           onClick={(e) => e.stopPropagation()}
         />
       </div>
+
       {file && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            marginTop: 16,
-          }}
-        >
+        <div className="upload-actions">
           <button
-            className="btn btn-grad"
-            style={{
-              padding: "11px 36px",
-              fontSize: 13,
-              borderRadius: 12,
-            }}
+            className="btn btn-grad upload-cta"
             onClick={(e) => {
               e.stopPropagation();
               startScan();

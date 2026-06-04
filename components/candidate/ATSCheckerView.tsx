@@ -369,35 +369,46 @@ export function ATSCheckerView() {
         </div>
 
         {/* PAGE HEADER */}
-        <div className="page-header">
+        <div
+          className={`page-header${viewState === "upload" ? " page-header--landing" : ""}`}
+        >
           <div>
             <div className="ph-eyebrow">ATS Intelligence · Powered by AI</div>
             <div className="ph-title">Resume Score &amp; Analysis</div>
-            <div className="ph-sub">
-              Comprehensive analysis across 40+ ATS criteria — keywords,
-              formatting, section scores, and AI-powered fix recommendations.
-            </div>
+            {viewState !== "upload" && (
+              <div className="ph-sub">
+                Comprehensive analysis across 40+ ATS criteria — keywords,
+                formatting, section scores, and AI-powered fix recommendations.
+              </div>
+            )}
+            {viewState === "upload" && (
+              <div className="ph-sub ph-sub--landing">
+                Upload your resume and optionally match it to a job posting.
+              </div>
+            )}
           </div>
-          <div className="ph-stats">
-            <div className="ph-stat">
-              <div className="ph-stat-val" style={{ color: "var(--cyan)" }}>
-                {analysis ? overallScore : "—"}
+          {viewState !== "upload" && (
+            <div className="ph-stats">
+              <div className="ph-stat">
+                <div className="ph-stat-val" style={{ color: "var(--cyan)" }}>
+                  {analysis ? overallScore : "—"}
+                </div>
+                <div className="ph-stat-lbl">ATS Score</div>
               </div>
-              <div className="ph-stat-lbl">ATS Score</div>
-            </div>
-            <div className="ph-stat">
-              <div className="ph-stat-val" style={{ color: "var(--amber)" }}>
-                {analysis ? `+${potentialNum}` : "—"}
+              <div className="ph-stat">
+                <div className="ph-stat-val" style={{ color: "var(--amber)" }}>
+                  {analysis ? `+${potentialNum}` : "—"}
+                </div>
+                <div className="ph-stat-lbl">Potential</div>
               </div>
-              <div className="ph-stat-lbl">Potential</div>
-            </div>
-            <div className="ph-stat">
-              <div className="ph-stat-val" style={{ color: "var(--teal)" }}>
-                {analysis ? targetScore : "—"}
+              <div className="ph-stat">
+                <div className="ph-stat-val" style={{ color: "var(--teal)" }}>
+                  {analysis ? targetScore : "—"}
+                </div>
+                <div className="ph-stat-lbl">Target</div>
               </div>
-              <div className="ph-stat-lbl">Target</div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Error / Success Messages */}
