@@ -1,3 +1,11 @@
+export interface MatchDimensions {
+  skillsFit: number;
+  experienceFit: number;
+  seniorityFit: number;
+  domainFit: number;
+  intentFit: number;
+}
+
 export interface JobMatch {
   id: string;
   title: string;
@@ -8,6 +16,9 @@ export interface JobMatch {
   type: string;
   experience: string;
   matchScore: number;
+  vectorScore?: number;
+  matchReason?: string;
+  dimensions?: MatchDimensions;
   description: string;
   matchedSkills: string[];
   missingSkills: string[];

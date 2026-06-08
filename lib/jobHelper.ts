@@ -1,130 +1,176 @@
-import { embed } from 'ai';
-import { google } from '@ai-sdk/google';
 import redisClient from './redisClient';
 import { prisma } from './prisma.js';
 import { qdrantClient } from './clients';
+import {
+    blendVectors,
+    embedProfile,
+    embedQuery,
+    generateCandidateProfile,
+    rephraseSearchQuery,
+    rerankJobsWithAI,
+    type CandidateProfile,
+    type RerankDimensions,
+} from './candidateProfile';
+import type { JobSearchMode, JobSearchParams } from './jobSearch.types';
 
+const RETRIEVAL_LIMIT = 30;
+const RESULT_LIMIT = 20;
 
-/**
- * Search for jobs matching a resume - standalone function (bypasses agent framework)
- * This is the fast path for job search without LLM orchestration overhead
- */
-export async function searchJobsForResume(resumeId: string) {
-    try {
-        console.log("🔍 Searching jobs for resume ID:", resumeId);
+type JobRow = {
+    id: string;
+    title: string;
+    employerName: string | null;
+    location: string | null;
+    description: string | null;
+    applyLink: string | null;
+    employmentType: string | null;
+    salary: string | null;
+    requirements: string | null;
+    responsibilities: string | null;
+};
 
-        // Validate resumeId
-        if (!resumeId || typeof resumeId !== 'string') {
-            throw new Error("Invalid resumeId provided");
-        }
-
-        const cacheKey = `resumeData:${resumeId}`;
-        const cachedResumeData = await redisClient.get(cacheKey);
-
-        let resumeVec, resumeInfo;
-        if (cachedResumeData) {
-            console.log("🚀 ~ cachedResumeData found");
-            const parsed = typeof cachedResumeData === 'string'
-                ? JSON.parse(cachedResumeData)
-                : cachedResumeData;
-            resumeVec = parsed.vector;
-            resumeInfo = parsed.resumeData;
-        } else {
-            console.log("🚀 ~ fetching from Qdrant");
-            const resumeResult = await qdrantClient.retrieve("resumes", {
-                ids: [resumeId],
-                with_payload: true,
-                with_vector: true,
-            });
-
-            if (!resumeResult || !resumeResult.length) {
-                throw new Error(`Resume not found with ID: ${resumeId}`);
-            }
-            resumeVec = resumeResult[0].vector;
-            resumeInfo = resumeResult[0].payload;
-
-            await redisClient.set(cacheKey, JSON.stringify({ resumeData: resumeInfo, vector: resumeVec }), { ex: 60 * 60 });
-        }
-
-        if (!resumeVec || !resumeInfo) {
-            throw new Error("Resume data is incomplete - missing vector or payload");
-        }
-
-        // Vector similarity from Qdrant - get jobIds and scores only
-        const matches = await qdrantClient.search("jobs", {
-            vector: resumeVec,
-            limit: 20, // Increased limit for better results
-            with_payload: true,
-            with_vector: false,
-            score_threshold: 0.60,
-        });
-
-        if (!matches || matches.length === 0) {
-            console.log("⚠️  No job matches found");
-            return [];
-        }
-
-        console.log(`✅ Found ${matches.length} job matches from Qdrant`);
-
-        // Extract jobIds from matches
-        const jobIds = matches.map((match: any) => match.payload.id).filter(Boolean);
-
-        if (jobIds.length === 0) {
-            console.log("⚠️  No valid job IDs found in matches");
-            return [];
-        }
-
-        // Fetch full job data from PostgreSQL
-        const jobs = await prisma.job.findMany({
-            where: {
-                id: { in: jobIds },
-            },
-        });
-
-        console.log(`✅ Fetched ${jobs.length} jobs from PostgreSQL`);
-
-        // Create a map for quick lookup
-        type JobType = typeof jobs[number];
-        const jobMap = new Map<string, JobType>(jobs.map((job: JobType) => [job.id, job]));
-
-        // Create a map of vector scores by jobId
-        const scoreMap = new Map<string, number>(matches.map((match: any) => [match.payload.id, match.score]));
-
-        // Process matches with full data from PostgreSQL - NO LLM calls
-        const results = matches.map((match: any) => {
-            const jobId = match.payload.id as string;
-            const job = jobMap.get(jobId);
-
-            if (!job) {
-                console.warn(`⚠️  Job ${jobId} not found in PostgreSQL, skipping`);
-                return null;
-            }
-
-            const vectorScore = scoreMap.get(jobId) || 0;
-
-            return {
-                id: job.id,
-                jobId: job.id,
-                jobTitle: job.title,
-                employerName: job.employerName,
-                jobLocation: job.location,
-                jobDescription: job.description,
-                jobApplyLink: job.applyLink,
-                jobEmploymentType: job.employmentType,
-                jobSalary: job.salary,
-                jobRequirements: job.requirements,
-                jobResponsibilities: job.responsibilities,
-                vectorScore: Math.round(vectorScore * 100),
-            };
-        }).filter(Boolean);
-
-        // Sort by vectorScore in descending order
-        results.sort((a: any, b: any) => b.vectorScore - a.vectorScore);
-
-        return results;
-    } catch (error: any) {
-        console.error("❌ Error in searchJobsForResume:", error);
-        throw new Error(`Job search failed: ${error.message}`);
+async function getOrCreateProfile(resumeId: string, resumeData: Record<string, unknown>): Promise<CandidateProfile> {
+    if (resumeData.candidateProfile) {
+        return resumeData.candidateProfile as CandidateProfile;
     }
+    const profile = await generateCandidateProfile(resumeData);
+    resumeData.candidateProfile = profile;
+    await qdrantClient.setPayload('resumes', {
+        points: [resumeId],
+        payload: { candidateProfile: profile },
+    });
+    return profile;
 }
 
+async function loadResumeContext(resumeId: string) {
+    const cacheKey = `resumeData:${resumeId}`;
+    const cached = await redisClient.get(cacheKey);
+
+    let resumeData: Record<string, unknown>;
+    if (cached) {
+        const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
+        resumeData = parsed.resumeData || parsed;
+    } else {
+        const result = await qdrantClient.retrieve('resumes', {
+            ids: [resumeId],
+            with_payload: true,
+            with_vector: true,
+        });
+        if (!result?.length) throw new Error(`Resume not found: ${resumeId}`);
+        resumeData = { ...(result[0].payload as Record<string, unknown>) };
+    }
+
+    const profile = await getOrCreateProfile(resumeId, resumeData);
+    let profileVector: number[] | undefined;
+
+    if (cached) {
+        const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
+        profileVector = parsed.profileVector;
+    }
+
+    if (!profileVector) {
+        profileVector = await embedProfile(profile);
+    }
+
+    await redisClient.set(
+        cacheKey,
+        JSON.stringify({ resumeData, profileVector, candidateProfile: profile }),
+        { ex: 60 * 60 }
+    );
+
+    return { profile, profileVector };
+}
+
+function formatResult(
+    job: JobRow,
+    vectorScore: number,
+    matchScore: number,
+    matchReason: string,
+    dimensions?: RerankDimensions
+) {
+    return {
+        id: job.id,
+        jobId: job.id,
+        jobTitle: job.title,
+        employerName: job.employerName,
+        jobLocation: job.location,
+        jobDescription: job.description,
+        jobApplyLink: job.applyLink,
+        jobEmploymentType: job.employmentType,
+        jobSalary: job.salary,
+        jobRequirements: job.requirements,
+        jobResponsibilities: job.responsibilities,
+        vectorScore: Math.round(vectorScore * 100),
+        matchScore,
+        matchReason,
+        dimensions,
+    };
+}
+
+export async function searchJobsForResume(resumeId: string, params: JobSearchParams = {}) {
+    const mode: JobSearchMode = params.mode || 'profile';
+    const query = params.query?.trim();
+
+    if ((mode === 'query' || mode === 'hybrid') && !query) {
+        throw new Error('A search query is required for query and hybrid modes');
+    }
+
+    const { profile, profileVector } = await loadResumeContext(resumeId);
+
+    let searchVector = profileVector;
+    let rephrasedQuery: string | undefined;
+
+    if (query && mode !== 'profile') {
+        rephrasedQuery = await rephraseSearchQuery(query);
+        const queryVector = await embedQuery(rephrasedQuery);
+        searchVector = mode === 'query' ? queryVector : blendVectors(profileVector, queryVector, 0.5);
+    }
+
+    const matches = await qdrantClient.search('jobs', {
+        vector: searchVector,
+        limit: RETRIEVAL_LIMIT,
+        with_payload: true,
+        with_vector: false,
+        score_threshold: 0.45,
+    });
+
+    if (!matches?.length) return [];
+
+    const vectorScores: Record<string, number> = {};
+    const jobIds: string[] = [];
+    matches.forEach((m: any) => {
+        const id = m.payload?.id;
+        if (id) {
+            jobIds.push(id);
+            vectorScores[id] = m.score;
+        }
+    });
+
+    const jobs = await prisma.job.findMany({ where: { id: { in: jobIds } } }) as JobRow[];
+
+    const rankings = await rerankJobsWithAI(profile, jobs, {
+        mode,
+        originalQuery: query,
+        rephrasedQuery,
+        vectorScores,
+    });
+
+    const jobMap = new Map(jobs.map((j) => [j.id, j]));
+
+    // Preserve reranker order (includes deterministic tie-breaks).
+    return rankings
+        .slice(0, RESULT_LIMIT)
+        .map((rank) => {
+            const job = jobMap.get(rank.jobId);
+            if (!job) return null;
+            const vs = vectorScores[job.id] || 0;
+            return formatResult(job, vs, rank.matchScore, rank.matchReason, rank.dimensions);
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+}
+
+export async function buildProfileForResume(resumeData: Record<string, unknown>) {
+    const profile = await generateCandidateProfile(resumeData);
+    const profileVector = await embedProfile(profile);
+    return { profile, profileVector };
+}

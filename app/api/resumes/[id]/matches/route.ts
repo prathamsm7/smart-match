@@ -47,7 +47,7 @@ export async function GET(
         }
 
         // Call searchJobsForResume directly (bypasses agent framework for speed)
-        const matches = await searchJobsForResume(resumeId);
+        const matches = await searchJobsForResume(resumeId, { mode: 'profile' });
 
         // Cache results for 5 minutes
         await redisClient.set(cachedKey, JSON.stringify(matches), { ex: 300 });

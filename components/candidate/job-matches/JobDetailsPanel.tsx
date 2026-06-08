@@ -84,10 +84,10 @@ export function JobDetailsPanel({
                 </span>
               </div>
             </div>
-            <MatchScoreDial 
-              value={analysis?.finalScore ?? 0} 
-              loading={loadingAnalysis} 
-              hasAnalysis={Boolean(analysis)} 
+            <MatchScoreDial
+              value={job.matchScore}
+              loading={false}
+              hasAnalysis
             />
           </div>
 

@@ -347,7 +347,7 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@langchain/core@^1.1.44", "@langchain/core@^1.1.48":
+"@langchain/core@^1.0.0", "@langchain/core@^1.1.44", "@langchain/core@^1.1.48":
   version "1.1.48"
   resolved "https://registry.npmjs.org/@langchain/core/-/core-1.1.48.tgz"
   integrity sha512-fQU6Guyb1pwc2fEplmA8FPbKfOMAofjnyJzExevro0FxEiuGHE18Ov/ZHmT9trWCDTZRI9eW1VIc6aChxV8pAQ==
@@ -359,6 +359,13 @@
     mustache "^4.2.0"
     p-queue "^6.6.2"
     zod "^3.25.76 || ^4"
+
+"@langchain/groq@^1.2.1":
+  version "1.2.1"
+  resolved "https://registry.npmjs.org/@langchain/groq/-/groq-1.2.1.tgz"
+  integrity sha512-K3QK3lVTUqxheA9u8upwN0cu04cySyaoKRmnN3vp5fEWQjzm08TYEv6FypyVEcEx0ZzBrHaYKsZIZKZSINN3RQ==
+  dependencies:
+    groq-sdk "^1.1.2"
 
 "@langchain/langgraph-checkpoint@^1.0.4":
   version "1.0.4"
@@ -485,6 +492,41 @@
   version "15.5.13"
   resolved "https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-15.5.13.tgz"
   integrity sha512-XrBbj2iY1mQSsJ8RoFClNpUB9uuZejP94v9pJuSAzdzwFVHeP+Vu2vzBCHwSObozgYNuTVwKhLukG1rGCgj8xA==
+
+"@next/swc-darwin-x64@15.5.13":
+  version "15.5.13"
+  resolved "https://registry.npmjs.org/@next/swc-darwin-x64/-/swc-darwin-x64-15.5.13.tgz"
+  integrity sha512-Ey3fuUeWDWtVdgiLHajk2aJ74Y8EWLeqvfwlkB5RvWsN7F1caQ6TjifsQzrAcOuNSnogGvFNYzjQlu7tu0kyWg==
+
+"@next/swc-linux-arm64-gnu@15.5.13":
+  version "15.5.13"
+  resolved "https://registry.npmjs.org/@next/swc-linux-arm64-gnu/-/swc-linux-arm64-gnu-15.5.13.tgz"
+  integrity sha512-aLtu/WxDeL3188qx3zyB3+iw8nAB9F+2Mhyz9nNZpzsREc2t8jQTuiWY4+mtOgWp1d+/Q4eXuy9m3dwh3n1IyQ==
+
+"@next/swc-linux-arm64-musl@15.5.13":
+  version "15.5.13"
+  resolved "https://registry.npmjs.org/@next/swc-linux-arm64-musl/-/swc-linux-arm64-musl-15.5.13.tgz"
+  integrity sha512-9VZ0OsVx9PEL72W50QD15iwSCF3GD/dwj42knfF5C4aiBPXr95etGIOGhb8rU7kpnzZuPNL81CY4vIyUKa2xvg==
+
+"@next/swc-linux-x64-gnu@15.5.13":
+  version "15.5.13"
+  resolved "https://registry.npmjs.org/@next/swc-linux-x64-gnu/-/swc-linux-x64-gnu-15.5.13.tgz"
+  integrity sha512-3knsu9H33e99ZfiWh0Bb04ymEO7YIiopOpXKX89ZZ/ER0iyfV1YLoJFxJJQNUD7OR8O7D7eiLI/TXPryPGv3+A==
+
+"@next/swc-linux-x64-musl@15.5.13":
+  version "15.5.13"
+  resolved "https://registry.npmjs.org/@next/swc-linux-x64-musl/-/swc-linux-x64-musl-15.5.13.tgz"
+  integrity sha512-AVPb6+QZ0pPanJFc1hpx81I5tTiBF4VITw5+PMaR1CrboAUUxtxn3IsV0h48xI7fzd6/zw9D9i6khRwME5NKUw==
+
+"@next/swc-win32-arm64-msvc@15.5.13":
+  version "15.5.13"
+  resolved "https://registry.npmjs.org/@next/swc-win32-arm64-msvc/-/swc-win32-arm64-msvc-15.5.13.tgz"
+  integrity sha512-FZ/HXuTxn+e5Lp6oRZMvHaMJx22gAySveJdJE0//91Nb9rMuh2ftgKlEwBFJxhkw5kAF/yIXz3iBf0tvDXRmCA==
+
+"@next/swc-win32-x64-msvc@15.5.13":
+  version "15.5.13"
+  resolved "https://registry.npmjs.org/@next/swc-win32-x64-msvc/-/swc-win32-x64-msvc-15.5.13.tgz"
+  integrity sha512-B5E82pX3VXu6Ib5mDuZEqGwT8asocZe3OMMnaM+Yfs0TRlmSQCBQUUXR9BkXQeGVboOWS1pTsRkS9wzFd8PABw==
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
@@ -2557,6 +2599,11 @@ graceful-fs@^4.2.4:
   version "4.2.11"
   resolved "https://registry.npmjs.org/graceful-fs/-/graceful-fs-4.2.11.tgz"
   integrity sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==
+
+groq-sdk@^1.1.2:
+  version "1.2.1"
+  resolved "https://registry.npmjs.org/groq-sdk/-/groq-sdk-1.2.1.tgz"
+  integrity sha512-dsDSWJRJf+n2dPiCv7zU3IsJbrh7jfSPqi6vc1q0TTK1oUF6bn+wv4P2VFdynkHpuJ0TTJ57vlpT87judPgVPA==
 
 has-bigints@^1.0.2:
   version "1.1.0"

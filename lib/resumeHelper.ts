@@ -6,6 +6,7 @@ import { openaiClient, qdrantClient } from "./clients";
 import redisClient from "./redisClient";
 import crypto from "crypto";
 import { embedText } from "./agents";
+import { buildProfileForResume } from "./jobHelper";
 
 
 
@@ -178,29 +179,22 @@ const uploadResume = tool({
         try {
             console.log("\n📤 Uploading resume to database...");
 
-            // Generate AI-enhanced embedding text for better domain-aware matching
-            const vectorText = await generateEnhancedResumeEmbeddingText(resumeData);
-            console.log("✅ Generated enhanced resume embedding text", vectorText);
+            const { profile, profileVector } = await buildProfileForResume(resumeData);
+            console.log("✅ Generated candidate profile for job search");
 
-            // Generate embedding
-            const vector = await embedText(vectorText);
-
-            // Generate unique ID
             const resumeId = crypto.randomUUID();
             console.log(`🆔 Generated Resume ID: ${resumeId}`);
 
-            // Upstash Redis uses 'ex' (lowercase) for expiration in seconds
-            await redisClient.set(`resumeData:${resumeId}`, JSON.stringify({ resumeData, vector }), { ex: 7 * 24 * 60 * 60 });
+            const payload = { ...resumeData, candidateProfile: profile };
 
-            // Upload to Qdrant
+            await redisClient.set(
+                `resumeData:${resumeId}`,
+                JSON.stringify({ resumeData: payload, profileVector, candidateProfile: profile }),
+                { ex: 7 * 24 * 60 * 60 }
+            );
+
             await qdrantClient.upsert("resumes", {
-                points: [
-                    {
-                        id: resumeId,
-                        vector: vector,
-                        payload: resumeData,
-                    },
-                ],
+                points: [{ id: resumeId, vector: profileVector, payload }],
             });
 
             return {

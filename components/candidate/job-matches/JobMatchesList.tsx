@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, MapPin, DollarSign, Clock } from "lucide-react";
+import { Building2, MapPin } from "lucide-react";
 import type { JobMatch } from "./types";
 
 interface JobMatchesListProps {
@@ -35,17 +35,16 @@ export function JobMatchesList({ jobs, selectedJobIndex, onSelect }: JobMatchesL
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-gray-400">
+          <div className="flex items-center gap-3 text-xs text-gray-400">
             <span className="flex items-center">
               <MapPin className="w-3 h-3 mr-1" />
               {job.location}
             </span>
-            <span className="text-green-400 font-semibold">{job.salary}</span>
-            <span className="flex items-center">
-              <Clock className="w-3 h-3 mr-1" />
-              {job.posted}
-            </span>
+            {job.salary && <span className="text-green-400 font-semibold">{job.salary}</span>}
           </div>
+          {job.matchReason && (
+            <p className="text-xs text-gray-500 mt-2 line-clamp-3">{job.matchReason}</p>
+          )}
         </button>
       ))}
     </div>
