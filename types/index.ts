@@ -41,6 +41,9 @@ export interface Application {
     };
     candidate: Candidate;
     matchScore?: number;
+    matchedSkills?: string[];
+    missingSkills?: string[];
+    matchReason?: string;
     status: 'SUBMITTED' | 'VIEWED' | 'SHORTLISTED' | 'INTERVIEW' | 'REJECTED' | 'HIRED' | 'WITHDRAWN';
     statusUpdatedAt?: string;
     coverLetter?: {

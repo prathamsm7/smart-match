@@ -2,12 +2,13 @@
 import { Mail, Phone, MapPin, Award, Download, FileText, Code, Languages, Briefcase, ClipboardCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Candidate, Application } from "@/types";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { applicationsService } from "@/lib/services/applications.service";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { StatusUpdateDropdown } from "./StatusUpdateDropdown";
 import { CoverLetterDisplay } from "./CoverLetterDisplay";
+import { ApplicationSkillGap } from "./ApplicationSkillGap";
 
 interface CandidateDetailProps {
     candidate: Candidate;
@@ -17,6 +18,47 @@ interface CandidateDetailProps {
 
 export function CandidateDetail({ candidate, application, onStatusUpdate }: CandidateDetailProps) {
     const router = useRouter();
+    const [matchedSkills, setMatchedSkills] = useState<string[]>(application.matchedSkills ?? []);
+    const [missingSkills, setMissingSkills] = useState<string[]>(application.missingSkills ?? []);
+    const [matchReason, setMatchReason] = useState<string>(application.matchReason ?? '');
+    const [loadingSkillGap, setLoadingSkillGap] = useState(false);
+
+    useEffect(() => {
+        setMatchedSkills(application.matchedSkills ?? []);
+        setMissingSkills(application.missingSkills ?? []);
+        setMatchReason(application.matchReason ?? '');
+    }, [application.id, application.matchedSkills, application.missingSkills, application.matchReason]);
+
+    useEffect(() => {
+        if (!application.id) return;
+
+        const hasSkills =
+            (application.matchedSkills?.length ?? 0) > 0 ||
+            (application.missingSkills?.length ?? 0) > 0 ||
+            !!application.matchReason;
+
+        if (hasSkills) return;
+
+        let cancelled = false;
+        setLoadingSkillGap(true);
+
+        applicationsService
+            .fetchApplicationSkillGap(application.id)
+            .then((data) => {
+                if (cancelled) return;
+                setMatchedSkills(data.matchedSkills ?? []);
+                setMissingSkills(data.missingSkills ?? []);
+                setMatchReason(data.matchReason ?? '');
+            })
+            .catch((err) => console.error('Failed to load skill gap:', err))
+            .finally(() => {
+                if (!cancelled) setLoadingSkillGap(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [application.id, application.matchedSkills, application.missingSkills, application.matchReason]);
     
     useEffect(() => {
         if (application.status === 'SUBMITTED') {
@@ -139,6 +181,14 @@ export function CandidateDetail({ candidate, application, onStatusUpdate }: Cand
             {application.coverLetter && (
                 <CoverLetterDisplay coverLetter={application.coverLetter} />
             )}
+
+            {/* Skill match analysis */}
+            <ApplicationSkillGap
+                matchedSkills={matchedSkills}
+                missingSkills={missingSkills}
+                matchReason={matchReason}
+                loading={loadingSkillGap}
+            />
 
             {/* Summary */}
             {candidate.summary && (

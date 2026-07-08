@@ -1,7 +1,6 @@
 import { Annotation, StateGraph, START, END } from "@langchain/langgraph";
 import type { GraphNode } from "@langchain/langgraph";
 import type { ATSAnalysis, JobTargetedATSAnalysis, Resume } from "@/types";
-import { extractTextFromPDFBuffer } from "@/lib/resumeHelper";
 import { extractResume, analyzeResume } from "./llm";
 import { buildFinalAnalysis, buildFinalJobAnalysis } from "./normalize";
 import type { LLMAnalysis } from "./types";
@@ -11,6 +10,7 @@ import {
     progressEvent,
     type ATSProgressEvent,
 } from "./progress";
+import { extractResumeWithLlama } from "@/lib/llama";
 
 export type ATSWorkflowResult = {
     resumeText: string;
@@ -38,11 +38,12 @@ const ATSState = Annotation.Root({
 const extractTextNode: GraphNode<typeof ATSState> = async (state) => {
     try {
         if (state.fileBuffer) {
-            const text = await extractTextFromPDFBuffer(state.fileBuffer);
-            if (!text?.trim()) {
-                return { error: "Could not extract text from PDF" };
-            }
-            return { resumeText: text.trim(), error: undefined };
+            const extracted = await extractResumeWithLlama(state.fileBuffer);
+            return {
+                resumeText: extracted.resumeData.summary || "PDF resume",
+                resumeData: extracted.resumeData,
+                error: undefined,
+            };
         }
         const text = state.resumeText?.trim() ?? "";
         if (!text) {
@@ -58,7 +59,7 @@ const extractTextNode: GraphNode<typeof ATSState> = async (state) => {
 
 /** Resume text → structured JSON */
 const parseDocumentNode: GraphNode<typeof ATSState> = async (state) => {
-    if (state.error || !state.resumeText) return {};
+    if (state.error || !state.resumeText || state.resumeData) return {};
     try {
         const resumeData = await extractResume(state.resumeText);
         return { resumeData, error: undefined };

@@ -19,8 +19,12 @@ npm install
 2. Create a `.env.local` file in the `smart_resume` directory:
 ```env
 GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key
+OPENAI_API_KEY=your_openai_api_key
 QDRANT_URL=your_qdrant_url
 QDRANT_API_KEY=your_qdrant_api_key
+
+# LlamaCloud Extract (resume PDF/text structured extraction)
+LLAMA_CLOUD_API_KEY=your_llama_cloud_api_key
 
 # Upstash Redis (recommended - uses REST API, no connection management)
 UPSTASH_REDIS_REST_URL=https://your-instance.upstash.io
@@ -30,11 +34,11 @@ UPSTASH_REDIS_REST_TOKEN=your_token
 # REDIS_URL=rediss://default:token@host:6379
 ```
 
-3. All required files are now self-contained in the `smart_resume` folder:
-   - `lib/agents.ts` - Contains all agent logic and resume processing
-   - `lib/redisClient.js` - Upstash Redis client (REST-based, perfect for serverless)
-   - `lib/schema.js` - Resume schema definition
-   - `lib/helpers.js` - Helper functions
+3. Resume extraction uses LlamaCloud Extract (`lib/llama/`) with the same schema as `lib/schema.js`. Other key files:
+   - `lib/resumeHelper.ts` — persist + upload orchestration
+   - `lib/llama/` — LlamaCloud client + extract
+   - `lib/schema.js` — Resume Zod schema (app shape)
+   - `lib/redisClient.js` — Upstash Redis client
 
 **Note**: This app uses [Upstash Redis](https://upstash.com/docs/redis/quickstarts/nextjs-app-router) which is REST-based and doesn't require connection management, making it perfect for Next.js serverless environments.
 

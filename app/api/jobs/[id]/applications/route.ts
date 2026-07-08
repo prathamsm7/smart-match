@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateWithRole } from '@/lib/auth';
+import { resolveApplicationSkillGap } from '@/lib/applicationSkillGap';
 
 // GET applications for a specific job
 export async function GET(
@@ -50,6 +51,7 @@ export async function GET(
           select: {
             id: true,
             json: true,
+            vectorId: true,
           },
         },
         coverLetter: {
@@ -72,15 +74,34 @@ export async function GET(
       },
     });
 
-    // Format applications - matchScore comes directly from DB (instant!)
-    const formattedApplications = applications.map((app: typeof applications[0]) => {
-      const snapshot = app.snapshot as any || {};
-      const resumeJson = app.resume?.json as any || {};
+    // Format applications — enrich with skill gap from snapshot or match cache
+    const formattedApplications = await Promise.all(
+      applications.map(async (app: typeof applications[0]) => {
+      const snapshot = (app.snapshot as Record<string, unknown>) || {};
+      const resumeJson = (app.resume?.json as Record<string, unknown>) || {};
+
+      const skillGap = await resolveApplicationSkillGap(
+        snapshot,
+        resumeJson,
+        {
+          title: job.title,
+          description: job.description,
+          requirements: job.requirements,
+          responsibilities: job.responsibilities,
+          employerName: job.employerName,
+        },
+        app.resume?.vectorId,
+        job.id,
+        { allowLlm: false }
+      );
 
       return {
         id: app.id,
         appliedDate: app.createdAt,
-        matchScore: app.matchScore ?? 50,  // Read from DB, fallback to 50 for old records
+        matchScore: app.matchScore ?? 50,
+        matchedSkills: skillGap.matchedSkills,
+        missingSkills: skillGap.missingSkills,
+        matchReason: skillGap.matchReason,
         status: app.status,
         statusUpdatedAt: app.statusUpdatedAt,
         coverLetter: app.coverLetter ? {
@@ -97,26 +118,27 @@ export async function GET(
         } : null,
         user: {
           id: app.user.id,
-          name: snapshot.applicantName || app.user.name || 'Unknown',
-          email: snapshot.applicantEmail || app.user.email,
+          name: (snapshot.applicantName as string) || app.user.name || 'Unknown',
+          email: (snapshot.applicantEmail as string) || app.user.email,
         },
         candidate: {
-          name: snapshot.applicantName || app.user.name || 'Unknown',
-          email: snapshot.applicantEmail || app.user.email,
-          phone: resumeJson.phone || snapshot.phone || null,
-          city: snapshot.applicantCity || resumeJson.location || null,
-          experience: snapshot.applicantTotalExperienceYears || resumeJson.totalExperienceYears || 0,
-          skills: snapshot.applicantSkills || resumeJson.skills || [],
-          summary: snapshot.applicantSummary || resumeJson.summary || '',
-          languages: snapshot.applicantLanguages || resumeJson.languages || [],
-          education: resumeJson.education || [],
-          experience_details: snapshot.applicantExperience || resumeJson.experience || [],
-          socialLinks: resumeJson.socialLinks || [],
-          softSkills: resumeJson.softSkills || [],
-          categorizedSkills: resumeJson.categorizedSkills || {},
+          name: (snapshot.applicantName as string) || app.user.name || 'Unknown',
+          email: (snapshot.applicantEmail as string) || app.user.email,
+          phone: (resumeJson.phone as string) || (snapshot.phone as string) || null,
+          city: (snapshot.applicantCity as string) || (resumeJson.location as string) || null,
+          experience: (snapshot.applicantTotalExperienceYears as number) || (resumeJson.totalExperienceYears as number) || 0,
+          skills: (snapshot.applicantSkills as string[]) || (resumeJson.skills as string[]) || [],
+          summary: (snapshot.applicantSummary as string) || (resumeJson.summary as string) || '',
+          languages: (snapshot.applicantLanguages as string[]) || (resumeJson.languages as string[]) || [],
+          education: (resumeJson.education as unknown[]) || [],
+          experience_details: (snapshot.applicantExperience as unknown[]) || (resumeJson.experience as unknown[]) || [],
+          socialLinks: (resumeJson.socialLinks as unknown[]) || [],
+          softSkills: (resumeJson.softSkills as string[]) || [],
+          categorizedSkills: (resumeJson.categorizedSkills as Record<string, string[]>) || {},
         },
       };
-    });
+    })
+    );
 
     return NextResponse.json({
       success: true,

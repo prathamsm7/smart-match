@@ -115,6 +115,7 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
         setApplyError('No primary resume found.');
         return;
       }
+      const analysis = jobDetails[job.id];
       await applicationsService.createApplication({
         jobId: job.id,
         resumeId: primaryResumeId,
@@ -123,6 +124,9 @@ export function JobMatchesView({ userId }: JobMatchesViewProps) {
         jobDescription: job.description,
         jobRequirements: job.requirements || null,
         matchScore: job.matchScore || undefined,
+        matchedSkills: analysis?.matchedSkills,
+        missingSkills: analysis?.missingSkills,
+        matchReason: analysis?.matchReason,
         coverLetterId: coverLetterId || undefined,
       });
       setCoverLetterId(null);

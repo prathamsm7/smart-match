@@ -4,6 +4,7 @@ import { authenticateRequest } from "@/lib/auth";
 import redisClient from "@/lib/redisClient";
 import { qdrantClient } from "@/lib/clients";
 import { checkUsageLimit, incrementUsage } from "@/lib/usageHelper";
+import { resolveApplicationSkillGap, skillGapToSnapshotFields } from "@/lib/applicationSkillGap";
 
 export async function POST(request: NextRequest) {
     try {
@@ -23,7 +24,19 @@ export async function POST(request: NextRequest) {
         }
 
         // 3. Get request body (matchScore is pre-computed from job search)
-        const { jobId, resumeId, jobTitle, employerName, jobDescription, jobRequirements, matchScore, coverLetterId } = await request.json();
+        const {
+            jobId,
+            resumeId,
+            jobTitle,
+            employerName,
+            jobDescription,
+            jobRequirements,
+            matchScore,
+            matchedSkills,
+            missingSkills,
+            matchReason,
+            coverLetterId,
+        } = await request.json();
 
         if (!jobId || !resumeId) {
             return NextResponse.json(
@@ -109,7 +122,27 @@ export async function POST(request: NextRequest) {
             console.log(`✅ Created job ${jobId} in PostgreSQL (lazy creation)`);
         }
 
-        // 7. Verify cover letter exists and belongs to user if provided
+        // 7. Resolve skill gap (from client, match cache, or skip LLM on apply)
+        const skillGap = await resolveApplicationSkillGap(
+            {
+                matchedSkills: matchedSkills ?? [],
+                missingSkills: missingSkills ?? [],
+                matchReason: matchReason ?? '',
+            },
+            resumeData as Record<string, unknown>,
+            {
+                title: job.title,
+                description: job.description,
+                requirements: job.requirements,
+                responsibilities: job.responsibilities,
+                employerName: job.employerName,
+            },
+            resumeId as string,
+            jobId,
+            { allowLlm: false }
+        );
+
+        // 8. Verify cover letter exists and belongs to user if provided
         if (coverLetterId) {
             const coverLetter = await prisma.coverLetter.findUnique({
                 where: { id: coverLetterId },
@@ -123,32 +156,32 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // 8. Create JobApplication with pre-computed match score
+        // 9. Create JobApplication with pre-computed match score + skill gap
         const application = await prisma.jobApplication.create({
             data: {
-                userId: dbUser.id,           // Database user ID
-                resumeId: resumeDbData.id,   // Database resume ID (validated above)
-                jobId: jobId,                // Job ID (already a string)
-                matchScore: matchScore ? Math.round(matchScore) : null,  // Pre-computed from job search
-                coverLetterId: coverLetterId || null,  // Link cover letter if provided
+                userId: dbUser.id,
+                resumeId: resumeDbData.id,
+                jobId: jobId,
+                matchScore: matchScore ? Math.round(matchScore) : null,
+                coverLetterId: coverLetterId || null,
                 snapshot: {
-                    "jobTitle": jobTitle,
-                    "employerName": employerName,
-                    "jobDescription": jobDescription,
-
-                    "applicantCity": resumeData?.location,
-                    "applicantName": resumeData?.name,
-                    "applicantEmail": resumeData?.email,
-                    "applicantSkills": resumeData?.skills,
-                    "applicantSummary": resumeData?.summary,
-                    "applicantLanguages": resumeData?.languages,
-                    "applicantExperience": resumeData?.experience,
-                    "applicantTotalExperienceYears": resumeData?.totalExperienceYears
-                }
-            }
+                    jobTitle: jobTitle,
+                    employerName: employerName,
+                    jobDescription: jobDescription,
+                    applicantCity: (resumeData as any)?.location,
+                    applicantName: (resumeData as any)?.name,
+                    applicantEmail: (resumeData as any)?.email,
+                    applicantSkills: (resumeData as any)?.skills,
+                    applicantSummary: (resumeData as any)?.summary,
+                    applicantLanguages: (resumeData as any)?.languages,
+                    applicantExperience: (resumeData as any)?.experience,
+                    applicantTotalExperienceYears: (resumeData as any)?.totalExperienceYears,
+                    ...skillGapToSnapshotFields(skillGap),
+                },
+            },
         });
 
-        // 9. Update cover letter with application ID if cover letter was provided
+        // 10. Update cover letter with application ID if cover letter was provided
         if (coverLetterId) {
             await prisma.coverLetter.update({
                 where: { id: coverLetterId },
@@ -156,7 +189,7 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // 10. Increment usage
+        // 11. Increment usage
         await incrementUsage(dbUser.id, 'application');
 
         return NextResponse.json({

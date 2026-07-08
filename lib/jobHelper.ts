@@ -5,7 +5,7 @@ import {
     blendVectors,
     embedProfile,
     embedQuery,
-    generateCandidateProfile,
+    deriveCandidateProfile,
     rephraseSearchQuery,
     rerankJobsWithAI,
     type CandidateProfile,
@@ -33,7 +33,7 @@ async function getOrCreateProfile(resumeId: string, resumeData: Record<string, u
     if (resumeData.candidateProfile) {
         return resumeData.candidateProfile as CandidateProfile;
     }
-    const profile = await generateCandidateProfile(resumeData);
+    const profile = deriveCandidateProfile(resumeData);
     resumeData.candidateProfile = profile;
     await qdrantClient.setPayload('resumes', {
         points: [resumeId],
@@ -138,11 +138,12 @@ export async function searchJobsForResume(resumeId: string, params: JobSearchPar
 
     const vectorScores: Record<string, number> = {};
     const jobIds: string[] = [];
-    matches.forEach((m: any) => {
-        const id = m.payload?.id;
+    matches.forEach((m) => {
+        const match = m as { payload?: { id?: string }; score?: number };
+        const id = match.payload?.id;
         if (id) {
             jobIds.push(id);
-            vectorScores[id] = m.score;
+            vectorScores[id] = match.score || 0;
         }
     });
 
@@ -167,10 +168,4 @@ export async function searchJobsForResume(resumeId: string, params: JobSearchPar
             return formatResult(job, vs, rank.matchScore, rank.matchReason, rank.dimensions);
         })
         .filter((r): r is NonNullable<typeof r> => r !== null);
-}
-
-export async function buildProfileForResume(resumeData: Record<string, unknown>) {
-    const profile = await generateCandidateProfile(resumeData);
-    const profileVector = await embedProfile(profile);
-    return { profile, profileVector };
 }

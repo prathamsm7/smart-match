@@ -1,22 +1,6 @@
-import { ChatGroq } from '@langchain/groq';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { z } from 'zod';
 import { openaiClient } from './clients';
 import { embedText } from './agents';
 import type { JobSearchMode } from './jobSearch.types';
-
-const candidateProfileSchema = z.object({
-    profileSummary: z.string(),
-    domains: z.array(z.string()),
-    seniority: z.string(),
-    coreSkills: z.array(z.string()),
-    experienceYears: z.number(),
-});
-
-const groqProfileModel = new ChatGroq({
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.2,
-});
 
 export interface CandidateProfile {
     profileSummary: string;
@@ -39,63 +23,68 @@ export function blendVectors(a: number[], b: number[], weightA = 0.5): number[] 
     return out.map((v) => v / norm);
 }
 
-export async function generateCandidateProfile(resumeData: Record<string, unknown>): Promise<CandidateProfile> {
-    const prompt = `You are an expert resume analyzer. Analyze given resume data and return JSON only:
+function flattenSkills(resumeData: Record<string, unknown>): string[] {
+    const fromFlat = (resumeData.skills as string[] | undefined) || [];
+    if (fromFlat.length) return fromFlat;
 
-            profileSummary: 4-5 sentence technical profile for job matching. It should be based on the resume summary, skiils, experience, projects, etc.
-            domains: list of domains the candidate has worked in, should be based on the experience and skills and projects.
-            seniority: seniority of the candidate.
-            coreSkills: list of core skills of the candidate.
-            experienceYears: total experience of the candidate.
+    const c = (resumeData.categorizedSkills || {}) as Record<string, unknown>;
+    return [
+        ...((c.languages as string[]) || []),
+        ...((c.frameworks as string[]) || []),
+        ...((c.ai as string[]) || []),
+        ...((c.databases as string[]) || []),
+        ...((c.tools as string[]) || []),
+        ...((c.other as string[]) || []),
+    ];
+}
 
-            output format:
-            {
-            "profileSummary": "4-5 sentence technical profile for job matching.",
-            "domains": ["frontend","backend","ai","devops", "sales", "marketing", "etc"],
-            "seniority": "junior"|"mid"|"senior"|"lead",
-            "coreSkills": ["top 8-12 technical skills", "soft skills", "etc"],
-            "experienceYears": number
-            }
+function inferDomains(resumeData: Record<string, unknown>): string[] {
+    const c = (resumeData.categorizedSkills || {}) as Record<string, unknown>;
+    const skills = flattenSkills(resumeData).map((s) => s.toLowerCase());
+    const domains = new Set<string>();
 
-            Strict rules:
-            - Dont make up any information, only based on the resume data.
-            - If any information is not present in the resume, keep it empty.
-
-    `;
-
-    const payload = {
-        summary: resumeData.summary,
-        categorizedSkills: resumeData.categorizedSkills,
-        experience: resumeData.experience,
-        totalExperienceYears: resumeData.totalExperienceYears,
-    };
-
-    try {
-        const model = groqProfileModel.withStructuredOutput(candidateProfileSchema, {
-            method: 'jsonSchema',
-            name: 'candidate_profile',
-        });
-        const parsed = await model.invoke([
-            new SystemMessage(prompt),
-            new HumanMessage(`Resume Data: ${JSON.stringify(payload)}`),
-        ]);
-        return {
-            profileSummary: parsed.profileSummary || '',
-            domains: parsed.domains || [],
-            seniority: parsed.seniority || 'mid',
-            coreSkills: parsed.coreSkills || [],
-            experienceYears: Number(parsed.experienceYears) || Number(resumeData.totalExperienceYears) || 0,
-        };
-    } catch {
-        const skills = (resumeData.skills as string[]) || [];
-        return {
-            profileSummary: `Professional with ${resumeData.totalExperienceYears || 0} years experience. Skills: ${skills.slice(0, 10).join(', ')}`,
-            domains: [],
-            seniority: 'mid',
-            coreSkills: skills.slice(0, 12),
-            experienceYears: Number(resumeData.totalExperienceYears) || 0,
-        };
+    if (((c.frameworks as string[]) || []).some((s) => /react|next|vue|angular|frontend|ui|tailwind/i.test(s))) {
+        domains.add('frontend');
     }
+    if (((c.ai as string[]) || []).some((s) => /ai|llm|langchain|openai|rag|machine learning|ml|prompt/i.test(s)) || skills.some((s) => /llm|langchain|openai|rag|machine learning|prompt/i.test(s))) {
+        domains.add('ai');
+    }
+    if (((c.tools as string[]) || []).some((s) => /docker|kubernetes|aws|gcp|azure|ci\/cd|devops|jenkins/i.test(s)) || skills.some((s) => /docker|kubernetes|aws|gcp|azure|ci\/cd|devops|jenkins/i.test(s))) {
+        domains.add('devops');
+    }
+    if (skills.some((s) => /node|express|api|backend|server|sql|database|postgres|mongodb|redis/i.test(s))) {
+        domains.add('backend');
+    }
+    if (skills.some((s) => /sales|marketing|business|growth|recruit/i.test(s))) {
+        domains.add('business');
+    }
+
+    return Array.from(domains);
+}
+
+function deriveSeniority(resumeData: Record<string, unknown>): CandidateProfile['seniority'] {
+    const years = Number(resumeData.totalExperienceYears) || 0;
+    if (years >= 8) return 'lead';
+    if (years >= 5) return 'senior';
+    if (years >= 2) return 'mid';
+    return 'junior';
+}
+
+export function deriveCandidateProfile(resumeData: Record<string, unknown>): CandidateProfile {
+    const skills = flattenSkills(resumeData);
+    const years = Number(resumeData.totalExperienceYears) || 0;
+    const summary =
+        typeof resumeData.summary === 'string' && resumeData.summary.trim()
+            ? resumeData.summary.trim()
+            : `Professional with ${years} years experience. Skills: ${skills.slice(0, 10).join(', ')}`;
+
+    return {
+        profileSummary: summary,
+        domains: inferDomains(resumeData),
+        seniority: deriveSeniority(resumeData),
+        coreSkills: skills.slice(0, 12),
+        experienceYears: years,
+    };
 }
 
 /** Rephrase a natural-language job search query for semantic vector search */
@@ -306,7 +295,7 @@ Include ALL jobs.`;
 
     try {
         const res = await openaiClient.chat.completions.create({
-            model: 'gpt-4o-mini',
+            model: 'gpt-5.4-mini-2026-03-17',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0,
             response_format: { type: 'json_object' },
@@ -346,5 +335,8 @@ Include ALL jobs.`;
 
     return results
         .sort(compareRanked)
-        .map(({ vectorScore, ...rest }) => rest);
+        .map(({ vectorScore, ...rest }) => {
+            void vectorScore;
+            return rest;
+        });
 }

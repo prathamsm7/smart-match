@@ -1,98 +1,86 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { extractTextFromPDFBuffer, runResumeAgent } from '@/lib/resumeHelper';
-import { qdrantClient } from '@/lib/clients';
-import { prisma } from '@/lib/prisma';
-import { authenticateRequest } from '@/lib/auth';
-import { checkUsageLimit, incrementUsage } from '@/lib/usageHelper';
+import { NextRequest, NextResponse } from "next/server";
+import { processAndStoreResume } from "@/lib/resumeHelper";
+import { qdrantClient } from "@/lib/clients";
+import { prisma } from "@/lib/prisma";
+import { authenticateRequest } from "@/lib/auth";
+import { checkUsageLimit, incrementUsage } from "@/lib/usageHelper";
+
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
     try {
-        // 1. Authenticate user
         const { user: dbUser, error } = await authenticateRequest();
         if (error) return error;
 
-        // 2. Check usage limit (Check BEFORE heavy processing)
-        const { allowed, limit, used } = await checkUsageLimit(dbUser.id, 'resume_upload');
+        const { allowed, limit, used } = await checkUsageLimit(dbUser.id, "resume_upload");
         if (!allowed) {
-            return NextResponse.json({ 
-                error: "Monthly resume upload limit reached", 
-                limit, 
-                used,
-                upgradeRequired: true 
-            }, { status: 403 });
-        }
-
-        const formData = await request.formData();
-        const file = formData.get('file') as File | null;
-        const resumeText = formData.get('resumeText') as string | null;
-
-        if (!file && !resumeText) {
             return NextResponse.json(
-                { error: 'Either file or resume text is required' },
-                { status: 400 }
+                {
+                    error: "Monthly resume upload limit reached",
+                    limit,
+                    used,
+                    upgradeRequired: true,
+                },
+                { status: 403 }
             );
         }
 
-        let text = resumeText || '';
-        if (file) {
-            const buffer = Buffer.from(await file.arrayBuffer());
-            text = await extractTextFromPDFBuffer(buffer);
+        const formData = await request.formData();
+        const file = formData.get("file") as File | null;
+
+        if (!file) {
+            return NextResponse.json({ error: "PDF file is required" }, { status: 400 });
         }
 
-        // Run the master agent
-        const {resumeId=''} = await runResumeAgent(text) as {resumeId?: string};
-        console.log("🚀 ~ POST ~ result:", resumeId)
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const { resumeId } = await processAndStoreResume(buffer, file.name || "resume.pdf");
 
-        // If successful, we need to associate the resume with the user
+        console.log("🚀 ~ POST ~ result:", resumeId);
+
         if (resumeId) {
-            // Get the resume data from Qdrant to save to Postgres
-            const qdrantResult = await qdrantClient.retrieve('resumes', {
+            const qdrantResult = await qdrantClient.retrieve("resumes", {
                 ids: [resumeId],
-                with_payload: true
+                with_payload: true,
             });
 
             if (qdrantResult && qdrantResult[0]) {
-                const payload = qdrantResult[0].payload as any;
+                const payload = qdrantResult[0].payload as object;
 
-                // Check if this is the user's first resume
                 const resumeCount = await prisma.resume.count({
-                    where: { userId: dbUser.id }
+                    where: { userId: dbUser.id },
                 });
 
                 const isPrimary = resumeCount === 0;
 
-                // Save to Postgres
                 await prisma.resume.create({
                     data: {
                         id: resumeId,
                         userId: dbUser.id,
                         vectorId: resumeId,
                         json: payload,
-                        isPrimary: isPrimary, // First resume is primary by default
-                    }
+                        isPrimary,
+                    },
                 });
 
-                // ✅ Sync metadata to Qdrant
-                await qdrantClient.setPayload('resumes', {
+                await qdrantClient.setPayload("resumes", {
                     payload: {
                         userId: dbUser.id,
-                        isPrimary: isPrimary
+                        isPrimary,
                     },
-                    points: [resumeId]
+                    points: [resumeId],
                 });
-                console.log(`✅ Synced metadata for Resume ${resumeId} to Qdrant (Primary: ${isPrimary})`);
+                console.log(
+                    `✅ Synced metadata for Resume ${resumeId} to Qdrant (Primary: ${isPrimary})`
+                );
 
-                // 3. Increment usage
-                await incrementUsage(dbUser.id, 'resume_upload');
+                await incrementUsage(dbUser.id, "resume_upload");
             }
         }
 
         return NextResponse.json({ resumeId });
-    } catch (error: any) {
-        console.error('Error processing resume:', error);
-        return NextResponse.json(
-            { error: error.message || 'Internal server error' },
-            { status: 500 }
-        );
+    } catch (error: unknown) {
+        console.error("Error processing resume:", error);
+        const message = error instanceof Error ? error.message : "Internal server error";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

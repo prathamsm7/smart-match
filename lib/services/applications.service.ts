@@ -6,6 +6,9 @@ interface CreateApplicationData {
     jobDescription?: string;
     jobRequirements?: any;
     matchScore?: number;
+    matchedSkills?: string[];
+    missingSkills?: string[];
+    matchReason?: string;
     coverLetterId?: string;
 }
 
@@ -108,5 +111,20 @@ export const applicationsService = {
         }
 
         return data;
+    },
+
+    async fetchApplicationSkillGap(applicationId: string) {
+        const response = await fetch(`/api/applications/${applicationId}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to fetch skill analysis');
+        }
+
+        return data as {
+            matchedSkills: string[];
+            missingSkills: string[];
+            matchReason: string;
+        };
     },
 };
