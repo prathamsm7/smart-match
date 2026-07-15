@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
+import { loadInterviewSession } from '@/lib/interview/loadSession';
 
 // GET - Get a specific interview
 export async function GET(
@@ -8,84 +9,39 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authenticate user
-    const { user: dbUser, error } = await authenticateRequest();
-    if (error) return error;
-
     const { id } = await params;
+    const forSession = request.nextUrl.searchParams.get('ready') === '1';
+    const result = await loadInterviewSession(
+      id,
+      forSession ? 'start' : 'view',
+    );
 
-    const interview = await prisma.interview.findUnique({
-      where: { id },
-      include: {
-        application: {
-          include: {
-            job: true,
-            resume: {
-              select: {
-                id: true,
-                json: true,
-              },
-            },
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    if (!interview) {
+    if (!result.ok) {
       return NextResponse.json(
-        { error: 'Interview not found' },
-        { status: 404 }
+        { error: result.error },
+        { status: result.status },
       );
     }
 
-    // Check if user owns this interview (candidate) or is the recruiter for the job
-    const isOwner = interview.userId === dbUser.id;
-    const isRecruiter = dbUser.role === 'recruiter' && interview.application.job.postedBy === dbUser.id;
-
-    if (!isOwner && !isRecruiter) {
-      return NextResponse.json(
-        { error: 'Unauthorized to view this interview' },
-        { status: 403 }
-      );
-    }
-
-    // Extract user data from application snapshot or resume
-    const snapshot = interview.application.snapshot as any;
-    const resumeData = interview.application.resume?.json as any;
-
-    const userData = {
-      name: snapshot?.applicantName || interview.user.name || resumeData?.name || 'Unknown',
-      email: snapshot?.applicantEmail || interview.user.email || resumeData?.email || '',
-      skills: snapshot?.applicantSkills || resumeData?.skills || [],
-      experience: snapshot?.applicantExperience || resumeData?.experience || [],
-      projects: resumeData?.projects || [],
-      summary: snapshot?.applicantSummary || resumeData?.summary || '',
-      totalExperienceYears: snapshot?.applicantTotalExperienceYears || resumeData?.totalExperienceYears || 0,
-    };
-
-    const jobData = {
-      title: interview.application.job.title,
-      employerName: interview.application.job.employerName,
-      description: interview.application.job.description,
-      requirements: interview.application.job.requirements,
-      responsibilities: interview.application.job.responsibilities,
-      location: interview.application.job.location,
-      salary: interview.application.job.salary,
-      employmentType: interview.application.job.employmentType,
-    };
+    const { interview, candidateProfile, jobProfile } = result.data;
 
     return NextResponse.json({
       success: true,
       interview,
-      userData,
-      jobData,
+      userData: {
+        ...candidateProfile,
+        email:
+          (interview.application.snapshot as { applicantEmail?: string } | null)
+            ?.applicantEmail ||
+          interview.user.email ||
+          '',
+      },
+      jobData: {
+        ...jobProfile,
+        location: interview.application.job.location,
+        salary: interview.application.job.salary,
+        employmentType: interview.application.job.employmentType,
+      },
     });
   } catch (error: any) {
     console.error('Error fetching interview:', error);

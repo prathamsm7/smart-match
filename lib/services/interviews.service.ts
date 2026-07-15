@@ -3,15 +3,27 @@
  * Handles all interview-related API calls
  */
 
+type InterviewSessionPayload = {
+  interview: unknown;
+  userData: any;
+  jobData: any;
+};
+
+/** Dedupes concurrent identical GETs (e.g. React Strict Mode double-mount). */
+const inflightSessionFetches = new Map<
+  string,
+  Promise<InterviewSessionPayload>
+>();
+
 export const interviewsService = {
   /**
    * Request an interview report
    */
   async requestInterviewReport(interviewId: string) {
-    const response = await fetch('/api/interview/report', {
-      method: 'POST',
+    const response = await fetch("/api/interview/report", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ interviewId }),
     });
@@ -19,7 +31,7 @@ export const interviewsService = {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to fetch interview report');
+      throw new Error(data.error || "Failed to fetch interview report");
     }
 
     return {
@@ -36,7 +48,7 @@ export const interviewsService = {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to fetch interviews');
+      throw new Error(data.error || "Failed to fetch interviews");
     }
 
     return data.interviews || [];
@@ -47,9 +59,9 @@ export const interviewsService = {
    */
   async updateInterviewStatus(interviewId: string, status: string) {
     const response = await fetch(`/api/interview/${interviewId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ status }),
     });
@@ -57,49 +69,65 @@ export const interviewsService = {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to update interview status');
+      throw new Error(data.error || "Failed to update interview status");
     }
 
     return data.interview;
   },
 
   /**
-   * Fetch interview data (user and job details)
+   * Single fetch for live session bootstrap (profiles + server-side eligibility).
+   * Concurrent callers for the same id share one in-flight request.
    */
   async fetchInterviewData(interviewId: string) {
-    const response = await fetch(`/api/interview/${interviewId}`);
-    const data = await response.json();
+    const existing = inflightSessionFetches.get(interviewId);
+    if (existing) return existing;
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to fetch interview data');
-    }
+    const request = (async (): Promise<InterviewSessionPayload> => {
+      const response = await fetch(`/api/interview/${interviewId}?ready=1`);
+      const data = await response.json();
 
-    return {
-      userData: data.userData,
-      jobData: data.jobData,
-    };
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch interview data");
+      }
+
+      return {
+        interview: data.interview,
+        userData: data.userData,
+        jobData: data.jobData,
+      };
+    })().finally(() => {
+      inflightSessionFetches.delete(interviewId);
+    });
+
+    inflightSessionFetches.set(interviewId, request);
+    return request;
   },
 
   /**
    * Persist conversation to the backend
    */
-  async persistConversation(interviewId: string, messages: any[], type: string) {
-    const response = await fetch('/api/interview/conversation', {
-      method: 'POST',
+  async persistConversation(
+    interviewId: string,
+    messages: any[],
+    type: string,
+  ) {
+    const response = await fetch("/api/interview/conversation", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         interviewId,
-        chat: messages,  // API expects 'chat', not 'messages'
-        stage: type,     // API expects 'stage', not 'type'
+        chat: messages,
+        stage: type,
       }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to persist conversation');
+      throw new Error(data.error || "Failed to persist conversation");
     }
 
     return data;

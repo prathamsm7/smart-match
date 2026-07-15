@@ -10,10 +10,14 @@ import { useLiveInterview } from "@/hooks/useLiveInterview";
 
 interface LiveInterviewUIProps {
   interviewId?: string;
+  initialUserData?: unknown;
+  initialJobData?: unknown;
 }
 
 export function LiveInterviewUI({
   interviewId,
+  initialUserData,
+  initialJobData,
 }: LiveInterviewUIProps) {
   // Get all logic from hook
   const {
@@ -32,7 +36,7 @@ export function LiveInterviewUI({
     endVapiCall,
     toggleMic,
     sendTextMessage,
-  } = useLiveInterview(interviewId);
+  } = useLiveInterview(interviewId, { initialUserData, initialJobData });
 
   // UI-only state
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
@@ -63,11 +67,11 @@ export function LiveInterviewUI({
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white rounded-2xl overflow-hidden border border-white/10">
+    <div className="h-screen w-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
       {/* Main Interview Interface */}
-      <div className="flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
+      <div className="flex flex-col h-full">
         {/* Compact Header */}
-        <header className="px-6 py-4 border-b border-white/10 bg-slate-900/80 backdrop-blur-xl">
+        <header className="px-6 py-4 border-b border-white/10 bg-slate-900/80 backdrop-blur-xl shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
@@ -144,32 +148,8 @@ export function LiveInterviewUI({
               </div>
             </div>
 
-            {/* Audio Visualizer */}
-            <div className="p-6 border-t border-white/10">
-              <div className="flex justify-center items-end space-x-2 h-24">
-                {[...Array(12)].map((_, i) => (
-                  <div
-                    key={i}
-                    className={`w-3 rounded-full transition-all duration-300 ${isAIPlaying
-                        ? 'bg-gradient-to-t from-blue-500 to-cyan-500'
-                        : 'bg-slate-700'
-                      }`}
-                    style={{
-                      height: isAIPlaying
-                        ? `${20 + Math.random() * 80}%`
-                        : '20%',
-                      transition: 'height 0.15s ease'
-                    }}
-                  />
-                ))}
-              </div>
-              <p className="text-center text-xs text-gray-400 mt-3">
-                {isAIPlaying ? 'AI is speaking' : 'Waiting...'}
-              </p>
-            </div>
-
             {/* Control Panel */}
-            <div className="p-6 bg-slate-900/50 border-t border-white/10">
+            <div className="p-6 bg-slate-900/50 border-t border-white/10 shrink-0">
               <div className="flex justify-center space-x-4">
                 <button
                   onClick={handleToggleMic}

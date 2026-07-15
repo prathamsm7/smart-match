@@ -26,6 +26,13 @@ QDRANT_API_KEY=your_qdrant_api_key
 # LlamaCloud Extract (resume PDF/text structured extraction)
 LLAMA_CLOUD_API_KEY=your_llama_cloud_api_key
 
+# Live interview voice provider: vapi (default) | deepgram
+NEXT_PUBLIC_INTERVIEW_PROVIDER=vapi
+# Deepgram Voice Agent (browser): server mints a JWT via POST /v1/auth/grant.
+# The key MUST have Member (or higher) role or grant returns 403 Insufficient permissions.
+# Console → API Keys → Create Key → Advanced → Permissions → Member
+# DEEPGRAM_API_KEY=your_deepgram_member_api_key
+
 # Upstash Redis (recommended - uses REST API, no connection management)
 UPSTASH_REDIS_REST_URL=https://your-instance.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_token

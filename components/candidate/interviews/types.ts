@@ -30,6 +30,8 @@ export interface ChatMessage {
   text: string;
   via: "audio" | "text";
   timestamp?: number;
+  /** True while the agent/user utterance is still growing. */
+  isStreaming?: boolean;
 }
 
 export interface LiveConfig {

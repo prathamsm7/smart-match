@@ -8,7 +8,16 @@ const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY ?? "";
 const VAPI_ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID ?? "";
 
 
-export function useLiveInterview(interviewId?: string) {
+type UseLiveInterviewOptions = {
+  initialUserData?: unknown;
+  initialJobData?: unknown;
+};
+
+export function useLiveInterview(
+  interviewId?: string,
+  options: UseLiveInterviewOptions = {},
+) {
+  const { initialUserData, initialJobData } = options;
 
   // Connection & Status
   const [status, setStatus] = useState<ConnectionStatus>("idle");
@@ -20,10 +29,12 @@ export function useLiveInterview(interviewId?: string) {
   const [micAllowed, setMicAllowed] = useState<boolean | null>(null);
   const [textInput, setTextInput] = useState("");
   
-  // Data
-  const [userData, setUserData] = useState<any>(null);
-  const [jobData, setJobData] = useState<any>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  // Data — prefer server-provided profiles (no client PII fetch)
+  const [userData, setUserData] = useState<any>(initialUserData ?? null);
+  const [jobData, setJobData] = useState<any>(initialJobData ?? null);
+  const [isLoadingData, setIsLoadingData] = useState(
+    !(initialUserData && initialJobData),
+  );
   
   const vapiRef = useRef<Vapi | null>(null);
   const chatRef = useRef<ChatMessage[]>([]);
@@ -35,6 +46,13 @@ export function useLiveInterview(interviewId?: string) {
   const isMicOn = vapiRef.current ? !vapiRef.current.isMuted() : false;
 
   useEffect(() => {
+    if (initialUserData && initialJobData) {
+      setUserData(initialUserData);
+      setJobData(initialJobData);
+      setIsLoadingData(false);
+      return;
+    }
+
     if (!interviewId) {
       setIsLoadingData(false);
       return;
@@ -60,7 +78,11 @@ export function useLiveInterview(interviewId?: string) {
       } catch (error) {
         console.error("Error fetching interview data:", error);
         if (isActive) {
-          setWarning("Failed to load interview data. Please refresh the page.");
+          setWarning(
+            error instanceof Error
+              ? error.message
+              : "Failed to load interview data. Please refresh the page.",
+          );
         }
       } finally {
         if (isActive) {
@@ -74,7 +96,7 @@ export function useLiveInterview(interviewId?: string) {
     return () => {
       isActive = false;
     };
-  }, [interviewId]);
+  }, [interviewId, initialUserData, initialJobData]);
 
   useEffect(() => {
     async function requestMicAccess() {
