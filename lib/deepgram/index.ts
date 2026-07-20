@@ -8,7 +8,10 @@ export type {
 
 export {
   END_INTERVIEW_FUNCTION_NAME,
+  WRAP_UP_AFTER_SEC,
   DEEPGRAM_AUDIO,
+  DEEPGRAM_MANAGED_THINK_MODEL,
+  DEEPGRAM_BYO_THINK,
   SESSION_ERROR_WINDOW_MS,
   SESSION_ERROR_LOG_DEBOUNCE_MS,
 } from "./constants";
@@ -31,9 +34,15 @@ export {
 
 export { buildInterviewerPrompt, buildInterviewGreeting } from "./prompt";
 
-export { buildInterviewAgentSettings } from "./agentSettings";
+export {
+  buildInterviewAgentSettings,
+  type ByoProxyThinkConfig,
+  type InterviewThinkMode,
+} from "./agentSettings";
 
 export {
   fetchDeepgramAccessToken,
+  fetchDeepgramSessionAgent,
   buildDeepgramSessionConfig,
+  type DeepgramSessionAgentResponse,
 } from "./sessionConfig";

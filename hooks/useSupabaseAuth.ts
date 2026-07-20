@@ -20,26 +20,32 @@ export function useSupabaseAuthSync() {
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("🔄 Auth event received:", event);
 
+      // Ignore auth churn while on interview — prevents remount / accidental hangup.
+      if (
+        event === "SIGNED_IN" &&
+        window.location.pathname.startsWith("/interview")
+      ) {
+        return;
+      }
+
       // Handle sign-in and sign-up (both trigger SIGNED_IN event)
       if (event === "SIGNED_IN") {
-        router.refresh(); // refresh server components
-        // Only redirect if we're on the signin page or have a redirect parameter
         const currentPath = window.location.pathname;
         const searchParams = new URLSearchParams(window.location.search);
-        const redirectTo = searchParams.get('redirect');
-        
-        // If we're on signin page, redirect to the target (or dashboard)
-        if (currentPath === '/signin') {
-          const target = redirectTo || '/dashboard';
+        const redirectTo = searchParams.get("redirect");
+
+        // Only refresh server components when landing from sign-in — not on every
+        // cross-tab SIGNED_IN while the user is mid-interview (that remounts the
+        // client tree and hangs up Vapi as customer-ended-call).
+        if (currentPath === "/signin") {
+          router.refresh();
+          const target = redirectTo || "/dashboard";
           if (target !== currentPath) {
             window.location.href = target;
           }
-        }
-        // If we have a redirect parameter but not on signin, respect it
-        else if (redirectTo && redirectTo !== currentPath) {
+        } else if (redirectTo && redirectTo !== currentPath) {
           window.location.href = redirectTo;
         }
-        // Otherwise, stay on current page (user is already on a valid page)
       }
 
       // Handle sign-out

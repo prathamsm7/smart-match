@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/superbase/client";
 
@@ -35,6 +35,7 @@ export function useRequireAuth() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const hasVerifiedRef = useRef(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -43,17 +44,15 @@ export function useRequireAuth() {
         const { data: { user }, error } = await supabase.auth.getUser();
 
         if (error || !user) {
-          // User is not authenticated, redirect to signin
-          // Preserve the current path for redirect after login
           const currentPath = window.location.pathname;
           router.push(`/signin?redirect=${encodeURIComponent(currentPath)}`);
           return;
         }
 
         setUser(user);
+        hasVerifiedRef.current = true;
       } catch (error) {
         console.error("Error checking auth:", error);
-        // On error, redirect to signin
         const currentPath = window.location.pathname;
         router.push(`/signin?redirect=${encodeURIComponent(currentPath)}`);
       } finally {
@@ -64,6 +63,10 @@ export function useRequireAuth() {
     checkAuth();
   }, [router]);
 
-  return { user, loading };
+  // After first successful auth, never block children again (avoids unmounting
+  // mid-interview if the layout re-renders from auth events).
+  const showLoading = loading && !hasVerifiedRef.current;
+
+  return { user, loading: showLoading };
 }
 

@@ -74,6 +74,7 @@ export function DeepgramSessionView({
           requestId={requestId}
           isLoading={isLoadingData}
           isEnding={isEnding}
+          providerLabel="Deepgram Voice Agent interviewer"
           onConnect={() => void connectSession()}
           onRequestEnd={() => {
             if (!isEnding) setShowEndConfirm(true);

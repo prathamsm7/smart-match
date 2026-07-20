@@ -13,9 +13,11 @@ type InterviewHeaderProps = {
   status: ConnectionStatus;
   startTime: number | null;
   elapsedSeconds: number;
-  requestId: string | null;
+  requestId?: string | null;
   isLoading: boolean;
-  isEnding: boolean;
+  isEnding?: boolean;
+  /** Shown under the title when not ending. */
+  providerLabel?: string;
   onConnect: () => void;
   onRequestEnd: () => void;
 };
@@ -24,9 +26,10 @@ export function InterviewHeader({
   status,
   startTime,
   elapsedSeconds,
-  requestId,
+  requestId = null,
   isLoading,
-  isEnding,
+  isEnding = false,
+  providerLabel = "Voice interviewer",
   onConnect,
   onRequestEnd,
 }: InterviewHeaderProps) {
@@ -45,12 +48,12 @@ export function InterviewHeader({
               <p className="text-xs text-gray-400">
                 {isEnding
                   ? "Ending interview and saving transcript…"
-                  : "Deepgram Voice Agent interviewer"}
+                  : providerLabel}
               </p>
               {requestId && (
                 <p
                   className="text-[10px] text-gray-500 font-mono mt-0.5 truncate max-w-[280px]"
-                  title={`Deepgram request_id (for support): ${requestId}`}
+                  title={`Session id (for support): ${requestId}`}
                 >
                   request_id: {requestId}
                 </p>

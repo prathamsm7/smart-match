@@ -3,9 +3,16 @@ import { useRouter } from "next/navigation";
 import Vapi from "@vapi-ai/web";
 import { interviewsService } from "@/lib/services";
 import { ChatMessage, ConnectionStatus } from "@/components/candidate/interviews/types";
+import { buildVapiInterviewAssistant } from "@/lib/vapi/assistantConfig";
+import {
+  getSharedVapiClient,
+  vapiHandlerRefs,
+} from "@/lib/vapi/sharedClient";
 
 const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY ?? "";
-const VAPI_ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID ?? "";
+/** Match interviewTurn.ts — mic level above this counts as user speaking. */
+const MIC_ACTIVE_LEVEL = 0.04;
+const MIC_SILENT_LEVEL = 0.02;
 
 
 type UseLiveInterviewOptions = {
@@ -28,6 +35,9 @@ export function useLiveInterview(
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [micAllowed, setMicAllowed] = useState<boolean | null>(null);
   const [textInput, setTextInput] = useState("");
+  const [micMuted, setMicMuted] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   
   // Data — prefer server-provided profiles (no client PII fetch)
   const [userData, setUserData] = useState<any>(initialUserData ?? null);
@@ -40,10 +50,98 @@ export function useLiveInterview(
   const chatRef = useRef<ChatMessage[]>([]);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFinalizingRef = useRef(false);
+  /** Only finalize when the user clicks Disconnect in the UI. */
+  const userRequestedEndRef = useRef(false);
+  /** True between call-start and call-end — used to avoid cleanup stop() races. */
+  const isCallActiveRef = useRef(false);
+  const finalizeRef = useRef<() => Promise<void>>(async () => {});
+  const lastEndedReasonRef = useRef<string | null>(null);
+  const detachLocalMicRef = useRef<(() => void) | null>(null);
+  const startLocalMicMonitorRef = useRef<(vapi: Vapi) => void>(() => {});
+  const stopLocalMicMonitorRef = useRef<() => void>(() => {});
+  const isSpeakingRef = useRef(false);
+  const micMutedRef = useRef(false);
+
+  isSpeakingRef.current = isSpeaking;
+  micMutedRef.current = micMuted;
+
+  const syncUserSpeakingFromMic = useCallback((level: number) => {
+    if (micMutedRef.current || isSpeakingRef.current) {
+      setIsUserSpeaking(false);
+      return;
+    }
+    if (level > MIC_ACTIVE_LEVEL) {
+      setIsUserSpeaking(true);
+    } else if (level < MIC_SILENT_LEVEL) {
+      setIsUserSpeaking(false);
+    }
+  }, []);
+
+  const stopLocalMicMonitor = useCallback(() => {
+    detachLocalMicRef.current?.();
+    detachLocalMicRef.current = null;
+    setMicLevel(0);
+    setIsUserSpeaking(false);
+  }, []);
+
+  const startLocalMicMonitor = useCallback(
+    (vapiInstance: Vapi) => {
+      stopLocalMicMonitor();
+
+      const daily = vapiInstance.getDailyCallObject() as {
+        startLocalAudioLevelObserver?: (interval?: number) => Promise<void>;
+        stopLocalAudioLevelObserver?: () => void;
+        getLocalAudioLevel?: () => number;
+        on?: (
+          event: string,
+          handler: (event: { audioLevel?: number }) => void,
+        ) => void;
+        off?: (
+          event: string,
+          handler: (event: { audioLevel?: number }) => void,
+        ) => void;
+      } | null;
+
+      if (!daily?.getLocalAudioLevel) {
+        window.setTimeout(() => startLocalMicMonitor(vapiInstance), 100);
+        return;
+      }
+
+      void daily.startLocalAudioLevelObserver?.(100);
+
+      const onLocalAudioLevel = (event: { audioLevel?: number }) => {
+        const level = event.audioLevel ?? daily.getLocalAudioLevel?.() ?? 0;
+        setMicLevel(level);
+        syncUserSpeakingFromMic(level);
+      };
+
+      daily.on?.("local-audio-level", onLocalAudioLevel);
+
+      const pollId = window.setInterval(() => {
+        const level = daily.getLocalAudioLevel?.() ?? 0;
+        setMicLevel(level);
+        syncUserSpeakingFromMic(level);
+      }, 150);
+
+      detachLocalMicRef.current = () => {
+        daily.off?.("local-audio-level", onLocalAudioLevel);
+        window.clearInterval(pollId);
+        try {
+          daily.stopLocalAudioLevelObserver?.();
+        } catch {
+          // ignore
+        }
+      };
+    },
+    [stopLocalMicMonitor, syncUserSpeakingFromMic],
+  );
+
+  startLocalMicMonitorRef.current = startLocalMicMonitor;
+  stopLocalMicMonitorRef.current = stopLocalMicMonitor;
   
   const isAIPlaying = isSpeaking;
   const chat = chatRef.current; // Use ref for chat, state only for triggering re-renders
-  const isMicOn = vapiRef.current ? !vapiRef.current.isMuted() : false;
+  const isMicOn = !micMuted;
 
   useEffect(() => {
     if (initialUserData && initialJobData) {
@@ -138,157 +236,167 @@ export function useLiveInterview(
     }
   }, [interviewId, router]);
 
+  finalizeRef.current = finalizeInterview;
+
+  // Create the Vapi client once when data is ready.
+  // Daily left-meeting is always reported as endedReason: customer-ended-call, so
+  // never recreate / stop() this client while a call can still be live (dep churn).
+  const dataReady = !isLoadingData && !!userData && !!jobData;
+
   useEffect(() => {
-    if (isLoadingData || !userData || !jobData) return;
-    if (!VAPI_API_KEY || !VAPI_ASSISTANT_ID) {
-      setWarning("Missing Vapi config. Set NEXT_PUBLIC_VAPI_API_KEY and NEXT_PUBLIC_VAPI_ASSISTANT_ID.");
+    if (!dataReady) return;
+    if (!VAPI_API_KEY) {
+      setWarning("Missing Vapi config. Set NEXT_PUBLIC_VAPI_API_KEY.");
       return;
     }
 
-    const vapiInstance = new Vapi(VAPI_API_KEY);
+    const vapiInstance = getSharedVapiClient(VAPI_API_KEY);
     vapiRef.current = vapiInstance;
 
-    // Store assistantId for later use
-    (vapiInstance as any).assistantId = VAPI_ASSISTANT_ID;
-
-    // Event listeners
-    vapiInstance.on("call-start", () => {
-      console.log("Call started");
-      setStatus("connected");
-      const now = Date.now();
-      setStartTime(now);
-      setElapsedSeconds(0);
-      
-      // Start timer interval
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-      timerIntervalRef.current = setInterval(() => {
-        setElapsedSeconds(Math.floor((Date.now() - now) / 1000));
-      }, 1000);
-    });
-
-    vapiInstance.on("call-end", () => {
-      console.log("Call ended");
-      setStatus("disconnected");
-      setIsSpeaking(false);
-      
-      // Stop timer
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
-      
-      // Log full conversation on session end using ref (always has latest)
-      console.log("=== Full Interview Conversation ===");
-      console.log(chatRef.current);
-      console.log("=== End of Conversation ===");
-
-      void finalizeInterview();
-    });
-
-    vapiInstance.on("speech-start", () => {
-      console.log("Assistant started speaking");
-      setIsSpeaking(true);
-    });
-
-    vapiInstance.on("speech-end", () => {
-      console.log("Assistant stopped speaking");
-      setIsSpeaking(false);
-    });
-
-    vapiInstance.on("message", (message: any) => {
-      console.log(message);
-      if (message.type === "transcript" && message.transcriptType === "final") {
-        const role = message.role === "user" ? "user" : "assistant";
-        const newMessage: ChatMessage = {
-          role: role,
-          text: message.transcript,
-          via: "audio",
-          timestamp: Date.now(),
-        };
-
-        // Update chat ref
-        const lastMsg = chatRef.current[chatRef.current.length - 1];
-        if (lastMsg && lastMsg.role === role) {
-          // Append to last message if same role
-          chatRef.current = [
-            ...chatRef.current.slice(0, -1),
-            {
-              ...lastMsg,
-              text: lastMsg.text + " " + message.transcript,
-              timestamp: Date.now(),
-            },
-          ];
-        } else {
-          chatRef.current = [...chatRef.current, newMessage];
-        }
-        // Trigger re-render
-        setChatUpdateTrigger(prev => prev + 1);
-      }
-
-      message.toolCallList.forEach((toolCall) => {
-        const functionName = toolCall.function?.name;
-        let params = {};
-        
+    vapiHandlerRefs.current = {
+      onCallStart: () => {
+        console.log("Call started");
+        isCallActiveRef.current = true;
+        userRequestedEndRef.current = false;
+        lastEndedReasonRef.current = null;
+        setStatus("connected");
+        setWarning(null);
         try {
-          const args = toolCall.function?.arguments;
-          params = typeof args === 'string' ? JSON.parse(args) : args || {};
-        } catch (err) {
-          console.error('Failed to parse tool arguments:', err);
-          return;
+          vapiInstance.setMuted(false);
+        } catch {
+          // ignore
         }
-        
-        console.log('Tool called:', functionName, params);
-        
-        if (functionName === 'requestEndInterview') {
-          console.info('requesting-end');
-          console.log('User requested to end interview:', params.reason);
-          
-          // The assistant should automatically ask for confirmation after this tool
-          
-        } else if (functionName === 'handleConfirmation') {
-          const { confirmed, userResponse } = params;
-          console.log('Confirmation response:', confirmed, userResponse);
-          
-          if (confirmed) {
-            console.info('confirmed: true');
-            // Tell the assistant to use endCall tool
-            vapiInstance.addMessage({
-              role: 'system',
-              content: 'User confirmed ending the interview. Now use the endCall tool to end the session.'
-            });
+        setMicMuted(false);
+        const now = Date.now();
+        setStartTime(now);
+        setElapsedSeconds(0);
+
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+        }
+        timerIntervalRef.current = setInterval(() => {
+          setElapsedSeconds(Math.floor((Date.now() - now) / 1000));
+        }, 1000);
+
+        startLocalMicMonitorRef.current(vapiInstance);
+      },
+
+      onCallEnd: () => {
+        console.log("Call ended", {
+          userRequestedEnd: userRequestedEndRef.current,
+          endedReason: lastEndedReasonRef.current,
+        });
+        isCallActiveRef.current = false;
+        setStatus("disconnected");
+        setIsSpeaking(false);
+        setIsUserSpeaking(false);
+        setMicLevel(0);
+        stopLocalMicMonitorRef.current();
+
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+
+        if (userRequestedEndRef.current) {
+          void finalizeRef.current();
+        } else {
+          setWarning(
+            lastEndedReasonRef.current
+              ? `Call ended (${lastEndedReasonRef.current}). Click Connect to continue your interview.`
+              : "Call disconnected unexpectedly. Click Connect to continue your interview.",
+          );
+        }
+      },
+
+      onVolumeLevel: (volume: number) => {
+        if (volume > 0.01) {
+          setIsSpeaking(true);
+          setIsUserSpeaking(false);
+        }
+      },
+
+      onSpeechStart: () => {
+        setIsSpeaking(true);
+        setIsUserSpeaking(false);
+      },
+
+      onSpeechEnd: () => {
+        setIsSpeaking(false);
+      },
+
+      onMessage: (message: Record<string, unknown>) => {
+        if (
+          message.type === "status-update" &&
+          typeof message.endedReason === "string"
+        ) {
+          lastEndedReasonRef.current = message.endedReason;
+          console.warn("[Vapi] endedReason:", message.endedReason);
+        }
+
+        if (
+          message.type === "transcript" &&
+          message.role === "user" &&
+          message.transcriptType === "partial"
+        ) {
+          setIsUserSpeaking(true);
+        }
+
+        if (message.type === "transcript" && message.transcriptType === "final") {
+          const role = message.role === "user" ? "user" : "assistant";
+          const transcript = String(message.transcript ?? "");
+          const newMessage: ChatMessage = {
+            role,
+            text: transcript,
+            via: "audio",
+            timestamp: Date.now(),
+          };
+
+          const lastMsg = chatRef.current[chatRef.current.length - 1];
+          if (lastMsg && lastMsg.role === role) {
+            chatRef.current = [
+              ...chatRef.current.slice(0, -1),
+              {
+                ...lastMsg,
+                text: `${lastMsg.text} ${transcript}`.trim(),
+                timestamp: Date.now(),
+              },
+            ];
           } else {
-            console.info('confirmed: false');
-            console.log('User declined to end interview, continuing...');
-            // The assistant should continue normally
+            chatRef.current = [...chatRef.current, newMessage];
           }
+          setChatUpdateTrigger((prev) => prev + 1);
         }
-      });
-    });
 
-    
+        const toolCalls = (message.toolCallList ?? message.toolCalls) as
+          | Array<{ function?: { name?: string; arguments?: unknown } }>
+          | undefined;
+        if (!Array.isArray(toolCalls) || toolCalls.length === 0) return;
 
-    vapiInstance.on("error", (error: any) => {
-      console.error("Vapi error:", error);
-      setWarning(error.message || "An error occurred");
-      setStatus("disconnected");
-    });
+        toolCalls.forEach((toolCall) => {
+          const functionName = toolCall.function?.name;
+          if (functionName === "requestEndInterview") {
+            console.info("[Vapi] requestEndInterview tool called");
+          } else if (functionName === "handleConfirmation") {
+            console.info("[Vapi] handleConfirmation tool called");
+          }
+        });
+      },
 
-    // Cleanup on unmount
+      onError: (error: { message?: string }) => {
+        console.error("Vapi error:", error);
+        setWarning(error.message || "An error occurred");
+        setStatus("disconnected");
+      },
+    };
+
     return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-      if (vapiRef.current) {
-        vapiRef.current.stop();
+      if (!isCallActiveRef.current) {
+        vapiHandlerRefs.current = {};
       }
     };
-  }, [userData, jobData, isLoadingData]);
-
-  // ========================================================================
-  // Vapi Actions
-  // ========================================================================
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bind handlers once data ready
+  }, [dataReady]);
 
   const startVapiCall = useCallback(() => {
     console.log("startVapiCall - userData:", userData);
@@ -296,8 +404,11 @@ export function useLiveInterview(
     console.log("startVapiCall - vapiRef.current:", vapiRef.current);
     
     if (!vapiRef.current) {
-      setWarning("Voice assistant not initialized. Please refresh the page.");
-      return;
+      if (!VAPI_API_KEY) {
+        setWarning("Missing Vapi API key.");
+        return;
+      }
+      vapiRef.current = getSharedVapiClient(VAPI_API_KEY);
     }
     
     if (!userData || !jobData) {
@@ -305,235 +416,39 @@ export function useLiveInterview(
       console.error("Missing data - userData:", userData, "jobData:", jobData);
       return;
     }
-    if (!VAPI_ASSISTANT_ID) {
-      setWarning("Missing Vapi assistant ID.");
+    if (!VAPI_API_KEY) {
+      setWarning("Missing Vapi API key.");
       return;
     }
 
     setStatus("connecting");
-    
+    userRequestedEndRef.current = false;
+    isFinalizingRef.current = false;
+
     const user = userData;
     const job = jobData;
-    const assistantId = (vapiRef.current as any).assistantId || VAPI_ASSISTANT_ID;
 
-    vapiRef.current.start(assistantId, {
-      artifactPlan: {
-        recordingEnabled: true,
-        loggingEnabled: true,
-        transcriptPlan: {
-          enabled: true,
-        },
-      },
-      monitorPlan: {},
-      model: {
-        provider: "openai",
-        model: "gpt-4o-mini",
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content: `
-              ROLE:
-              You are a professional technical interviewer with over 10 years of real-world interview experience.
-              Your name is Despina.
-
-              PRIMARY TASK:
-              You are given candidate details and a job description.
-              Your sole responsibility is to ASK interview questions to the candidate, one at a time.
-
-              You must ask UNIQUE, job-relevant questions based strictly on:
-              - The candidate's skills
-              - Their projects
-              - Their work experience
-              - The job requirements
-
-              You must NOT explain concepts, provide answers, evaluate responses, or give feedback. 
-              Give response to candidate only if he asked question related to job description and ask for clarification of question.
-
-              CANDIDATE DETAILS:
-              - Name: ${user.name || "Unknown"}
-              - Experience Level: ${user.totalExperienceYears || "NA"}
-              - Skills: ${JSON.stringify(user.skills || [])}
-              - Projects: ${JSON.stringify(user.projects || [])}
-              - Summary: ${user.summary || ""}
-              - Experience: ${JSON.stringify(user.experience || [])}
-
-              JOB DETAILS:
-              - Position: ${job.title || "Unknown"}
-              - Company: ${job.employerName || "Unknown"}
-              - Job Description: ${job.description || ""}
-              - Job Requirements: ${job.requirements || ""}
-              - Job Responsibilities: ${job.responsibilities || ""}
-
-              INTERVIEW BEHAVIOR RULES:
-              1. Ask ONLY questions.
-              2. Ask ONE question at a time.
-              3. Maintain a professional, friendly, helpful, and encouraging tone.
-              4. Keep questions concise, clear, and role-relevant.
-              5. Never repeat a question.
-              6. Never go off-topic.
-              7. Never judge, score, or comment on the candidate's answers.
-
-              QUESTION PRIORITY (Highest → Lowest): High Priority for skills, ask as many as questions realated to the skiils mentioned
-              1. Technical skills aligned with both the candidate profile and job description
-              2. Previous relevant work experience
-              3. Tools, frameworks, and technologies related to the role
-              4. Projects the candidate has worked on
-
-              FOLLOW-UP QUESTION LOGIC:
-              Ask a follow-up question ONLY if:
-              - The candidate's answer lacks clarity
-              - More technical depth is required
-              - A claim or experience needs validation
-
-              Follow-up questions MUST directly reference the candidate's previous response.
-
-              INTERVIEW FLOW:
-              1. Introduction + request for candidate self-introduction
-              2. Skill-specific technical questions
-              3. Experience-based questions
-              4. Project deep-dive questions
-              5. Problem-solving and decision-making questions
-              6. Wrap-up question
-
-              START INSTRUCTIONS:
-              Begin the interview now by:
-              - Greeting the candidate by name
-              - Introducing yourself as Despina
-              - Mentioning the job role and company name
-              - Asking the candidate to introduce themselves
-
-              END INTERVIEW LOGIC:
-              1. When user asks to end interview, use "requestEndInterview" tool
-              2. After using that tool, ask: "Are you sure you want to end the interview? Please say yes to confirm or no to continue."
-              3. Based on their response, use "handleConfirmation" tool:
-                - If they say yes/sure/okay/confirm → confirmed: true
-                - If they say no/wait/continue → confirmed: false
-              4. If handleConfirmation returns confirmed: true, then use the "endCall" tool to actually end the interview
-              5. If handleConfirmation returns confirmed: false, continue with the interview normally
-              6. Do not end the interview without going through this confirmation process.
-            `,
-          },
-        ],
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'requestEndInterview',
-              description: 'Called when user first requests to end the interview',
-              parameters: {
-                type: 'object',
-                properties: {
-                  reason: {
-                    type: 'string',
-                    description: 'User reason for wanting to end'
-                  }
-                }
-              }
-            }
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'handleConfirmation',
-              description: 'Called after asking for confirmation to process the user response',
-              parameters: {
-                type: 'object',
-                properties: {
-                  confirmed: {
-                    type: 'boolean',
-                    description: 'True if user confirmed ending, false if they want to continue'
-                  },
-                  userResponse: {
-                    type: 'string',
-                    description: 'Exact user response to confirmation question'
-                  }
-                },
-                required: ['confirmed']
-              }
-            }
-          },
-          {
-            type: 'endCall',
-            messages: [
-              {
-                type: 'request-start',
-                content: 'Thank you for your time. The interview is now ending. Goodbye!'
-              }
-            ]
-          }
-        ]
-      },
-      firstMessage: `Hello ${user.name || "there"}! I'm your AI interviewer for the ${job.title || "position"} at ${job.employerName || "the company"}. Let's begin!`,
-      firstMessageMode: "assistant-speaks-first-with-model-generated-message",
-      transcriber: {
-        provider: "deepgram",
-        model: "nova-2",
-      },
-      voice: {
-        provider: "vapi",
-        voiceId: "Neha",
-      },
-      backgroundSpeechDenoisingPlan: {},
-      startSpeakingPlan: {
-        smartEndpointingPlan: {
-          provider: "livekit",
-          waitFunction: "2000 / (1 + exp(-10 * (x - 0.5)))",
-        },
-        waitSeconds: 0.3,
-      },
-      stopSpeakingPlan: {
-        numWords: 2,
-        voiceSeconds: 0.3,
-        backoffSeconds: 1.0,
-        acknowledgementPhrases: [
-          "mm-hmm",
-          "yeah",
-          "okay",
-          "uh-huh",
-          "right",
-          "I see",
-        ],
-      },
-      hooks: [
-        {
-          on: "customer.speech.timeout",
-          options: {
-            timeoutSeconds: 20,
-            triggerMaxCount: 2,
-            triggerResetMode: "onUserSpeech" as any,
-          },
-          do: [
-            {
-              type: "say",
-              prompt:
-                "Are you still there? Please let me know how I can help you.",
-            },
-          ],
-        },
-      ] as any,
-    });
+    vapiRef.current.start(buildVapiInterviewAssistant(user, job));
   }, [userData, jobData]);
 
   const endVapiCall = useCallback(() => {
+    userRequestedEndRef.current = true;
     if (vapiRef.current) {
       vapiRef.current.end();
     }
   }, []);
 
   const connectSession = useCallback(() => {
-    if (status === "connected") {
-      endVapiCall();
-    } else {
-      startVapiCall();
-    }
-  }, [status, startVapiCall, endVapiCall]);
+    // Connect only — never toggle-end from this handler (that caused accidental hangups).
+    if (status === "connected" || status === "connecting") return;
+    startVapiCall();
+  }, [status, startVapiCall]);
 
   const toggleMic = useCallback(() => {
-    if (vapiRef.current) {
-      const currentlyMuted = vapiRef.current.isMuted();
-      vapiRef.current.setMuted(!currentlyMuted);
-    }
+    if (!vapiRef.current) return;
+    const nextMuted = !vapiRef.current.isMuted();
+    vapiRef.current.setMuted(nextMuted);
+    setMicMuted(nextMuted);
   }, []);
 
   const sendTextMessage = useCallback(() => {
@@ -579,6 +494,9 @@ export function useLiveInterview(
     setTextInput,
     isAIPlaying,
     isMicOn,
+    isUserSpeaking,
+    micLevel,
+    isListening: status === "connected" && !isSpeaking && isMicOn,
     userData,
     jobData,
     isLoadingData,

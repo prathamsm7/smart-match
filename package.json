@@ -24,7 +24,7 @@
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.81.1",
     "@upstash/redis": "^1.35.6",
-    "@vapi-ai/web": "^2.5.2",
+    "@vapi-ai/web": "^2.6.1",
     "ai": "^5.0.89",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",

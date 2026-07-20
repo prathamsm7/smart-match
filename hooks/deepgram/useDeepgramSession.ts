@@ -15,6 +15,7 @@ import { interviewsService } from "@/lib/services";
 import type { ChatMessage } from "@/components/candidate/interviews/types";
 import {
   END_INTERVIEW_FUNCTION_NAME,
+  WRAP_UP_AFTER_SEC,
   SESSION_ERROR_WINDOW_MS,
   SESSION_ERROR_LOG_DEBOUNCE_MS,
   describeDeepgramError,
@@ -88,6 +89,8 @@ export function useDeepgramSession({
     useAgentMicrophone();
   const { isSpeaking, isListening, mode } = useAgentMode();
   const session = useAgentSession();
+  const wrapUpSignaledRef = useRef(false);
+
 
   const clearTimer = useCallback(() => {
     if (timerIntervalRef.current) {
@@ -519,6 +522,40 @@ export function useDeepgramSession({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup on unmount only
   }, []);
 
+  useEffect(() => {
+    if (
+      wrapUpSignaledRef.current ||
+      state !== "connected" ||
+      !settingsReadyRef.current ||
+      elapsedSeconds < WRAP_UP_AFTER_SEC ||
+      isFinalizingRef.current
+    ) {
+      return;
+    }
+
+    wrapUpSignaledRef.current = true; // ← required, or it loops
+
+    // UpdatePrompt APPENDS to the current system prompt (Deepgram docs).
+    session.updatePrompt(`
+        TIME SIGNAL: interview time limit reached. WRAP-UP PHASE is active.
+        IMPORTANT:
+        - The wrap-up question was ALREADY spoken to the candidate (injected).
+        - Do NOT mention the time limit again.
+        - Do NOT ask another wrap-up / "anything to add" question.
+        - Do NOT start new technical questions.
+        AFTER wrap-up answer (even "no" / "nothing"):
+        1. Speak thanks + brief closing once.
+        2. Say You are ending the interview now due to the time limit.
+        3. call end_interview function to end the interview with confirmed:true.
+        Never continue with new questions after TIME SIGNAL.
+        "no" here means "nothing to add", NOT "continue the interview".
+    `.trim());
+
+    session.injectAgentMessage("We've reached the interview time limit. Before we finish, is there anything you'd like to add?");
+
+
+  }, [elapsedSeconds, state, session]);
+
   const connectSession = useCallback(async () => {
     if (isConnectingRef.current || isEnding || isFinalizingRef.current) return;
 
@@ -534,6 +571,7 @@ export function useDeepgramSession({
     intentionalEndRef.current = false;
     faultedRef.current = false;
     settingsReadyRef.current = false;
+    wrapUpSignaledRef.current = false;
     isFinalizingRef.current = false;
     setIsEnding(false);
     setLiveChat([]);
