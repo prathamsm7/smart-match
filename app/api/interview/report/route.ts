@@ -168,7 +168,7 @@ export async function POST(req: Request) {
       }
 
       const transcript = chat
-        .map((msg) => `${msg.sender || "system"}: ${msg.text || ""}`)
+        .map((msg) => `${msg.role || msg.sender || "system"}: ${msg.text || ""}`)
         .join("\n");
 
       // Extract candidate profile from application snapshot
@@ -331,6 +331,7 @@ export async function POST(req: Request) {
                 "scores": {
                     "technical": number,
                     "communication": number,
+                    "problemSolving": number,
                     "overall": number
                 },
                 "hiringRecommendation": {

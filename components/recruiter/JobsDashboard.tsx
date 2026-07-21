@@ -18,6 +18,7 @@ export function JobsDashboard({ userId }: { userId: string }) {
   const {
     applications: jobApplications,
     loading: loadingApplications,
+    error: applicationsError,
     fetchApplications: fetchJobApplications,
     clearApplications
   } = useApplications();
@@ -28,7 +29,7 @@ export function JobsDashboard({ userId }: { userId: string }) {
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
 
   // View states
-  const [selectedJobIndex, setSelectedJobIndex] = useState<number | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number | null>(null);
 
   async function handleStatusUpdate(applicationId: string, newStatus: string) {
@@ -74,14 +75,14 @@ export function JobsDashboard({ userId }: { userId: string }) {
     setEditingJob(null);
   }
 
-  function handleSelectJob(index: number) {
-    setSelectedJobIndex(index);
+  function handleSelectJob(jobId: string) {
+    setSelectedJobId(jobId);
     setSelectedCandidateIndex(null);
-    fetchJobApplications(jobs[index].id);
+    fetchJobApplications(jobId);
   }
 
   function handleBackToJobs() {
-    setSelectedJobIndex(null);
+    setSelectedJobId(null);
     setSelectedCandidateIndex(null);
     clearApplications();
   }
@@ -95,7 +96,7 @@ export function JobsDashboard({ userId }: { userId: string }) {
     );
   });
 
-  const currentJob = selectedJobIndex !== null ? jobs[selectedJobIndex] : null;
+  const currentJob = selectedJobId ? jobs.find((job) => job.id === selectedJobId) ?? null : null;
   const currentCandidate = selectedCandidateIndex !== null ? jobApplications[selectedCandidateIndex]?.candidate : null;
   const currentApplication = selectedCandidateIndex !== null ? jobApplications[selectedCandidateIndex] : null;
 
@@ -132,7 +133,7 @@ export function JobsDashboard({ userId }: { userId: string }) {
   }
 
   // Job List View
-  if (selectedJobIndex === null) {
+  if (selectedJobId === null) {
     return (
       <div className="space-y-6">
         {/* Header */}
@@ -191,11 +192,11 @@ export function JobsDashboard({ userId }: { userId: string }) {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredJobs.map((job, index) => (
+            {filteredJobs.map((job) => (
               <JobCard
                 key={job.id}
                 job={job}
-                onSelect={() => handleSelectJob(index)}
+                onSelect={() => handleSelectJob(job.id)}
                 onEdit={(e) => handleEdit(job, e)}
                 onDelete={(e) => {
                   e.stopPropagation();
@@ -243,6 +244,7 @@ export function JobsDashboard({ userId }: { userId: string }) {
           <ApplicantList
             applications={jobApplications}
             loading={loadingApplications}
+            error={applicationsError}
             selectedIndex={selectedCandidateIndex}
             onSelect={setSelectedCandidateIndex}
           />

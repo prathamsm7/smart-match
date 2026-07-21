@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         overallScore: report?.scores?.overall || null,
         technicalScore: report?.scores?.technical || null,
         communicationScore: report?.scores?.communication || null,
-        problemSolvingScore: report?.problemSolvingScore || null,
+        problemSolvingScore: report?.scores?.problemSolving || report?.problemSolvingScore || null,
         hiringDecision: report?.hiringRecommendation?.decision || null,
         hasReport: !!interview.report,
       };

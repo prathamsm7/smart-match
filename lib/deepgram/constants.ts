@@ -13,7 +13,7 @@ export const DEEPGRAM_MANAGED_THINK_MODEL = "gpt-5.4";
  * @see lib/deepgram/byoThink.ts
  */
 export const DEEPGRAM_BYO_THINK = {
-  model: "gpt-4o",
+  model: "gpt-4o-mini",
   temperature: 0.6,
   contextLength: "max" as const,
 } as const;

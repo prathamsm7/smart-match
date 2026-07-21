@@ -4,11 +4,12 @@ import { Application } from "@/types";
 interface ApplicantListProps {
     applications: Application[];
     loading: boolean;
+    error?: string | null;
     selectedIndex: number | null;
     onSelect: (index: number) => void;
 }
 
-export function ApplicantList({ applications, loading, selectedIndex, onSelect }: ApplicantListProps) {
+export function ApplicantList({ applications, loading, error, selectedIndex, onSelect }: ApplicantListProps) {
     return (
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-white/10">
             <h3 className="text-xl font-bold mb-4 flex items-center">
@@ -19,6 +20,11 @@ export function ApplicantList({ applications, loading, selectedIndex, onSelect }
             {loading ? (
                 <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+            ) : error ? (
+                <div className="text-center py-8">
+                    <p className="text-red-400 mb-2">Failed to load applicants</p>
+                    <p className="text-sm text-gray-400">{error}</p>
                 </div>
             ) : applications.length === 0 ? (
                 <div className="text-center py-8">
